@@ -114,7 +114,7 @@ def makeModifierTree(modifier, index=0, depth=0):
                 currModifierString = ""
 
                 # move index to end of the regex
-                index += closingSlashIndex + 1
+                index = closingSlashIndex
 
             # the closing slash wasn't found
             except ValueError:
