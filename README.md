@@ -2,11 +2,9 @@
 Extends the notation for sfinder pieces and output all the queues  
 The queues are sorted with `TILJSZO` ordering
 
----
 ## Format
 ```python3 pieces.py [pieces...]```
 
----
 ## General Pieces Format
 ```pieces{modifier}```  
 The modifier applies to the pieces  
@@ -15,13 +13,11 @@ To separate parts to be modify and not, delimitate with commas
 Ex: `SZ,Z*p2{modifier}`  
 The modifier will apply to only the Z\*p2  
 
----
 ## Sfinder Pieces
 The `[]` in the sfinder pieces are able to handle duplicate pieces
 
 Ex: `[SSZ]!` any permutation of the pieces SSZ
 
----
 ## Modifiers
 To apply multiple modifiers, use the `&&` and `||` operators. Use parentheses for grouping in the boolean expression.  
   
