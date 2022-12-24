@@ -9,6 +9,7 @@ The queues are sorted with `TILJSZO` ordering
 ```pieces{modifier}```  
 The modifier applies to the pieces  
 To separate parts to be modify and not, delimitate with commas  
+Parentheses are supported for applying a modifier on pieces already modified  
   
 Ex: `SZ,Z*p2{modifier}`  
 The modifier will apply to only the Z\*p2  

@@ -4,6 +4,9 @@ from itertools import product, permutations, chain
 from string import whitespace
 import re
 
+# bag constant
+BAG = "TILJSZO"
+
 # sort queues
 def sortQueues(queues):
     '''Sort the queue with TILJSZO ordering'''
@@ -22,8 +25,6 @@ def sortQueues(queues):
 # get the pieces from the normal sfinder format
 def getQueues(sfinderFormatPieces, sortQueuesBool=True):
     '''Get the pieces from the normal sfinder format'''
-
-    BAG = "TILJSZO"
 
     # two sections with prefix of pieces and suffix of permutate
     prefixPattern = "([*TILJSZO]|\[\^?[TILJSZO]+\])"
@@ -165,10 +166,10 @@ def makeModifierTree(modifier, index=0, depth=0):
                 raise RuntimeError(f"Missing second character of '{char}'")
         
         # some other character
-        else:
-            # ignore whitespace
-            if char not in whitespace:
-                currModifierString += char
+        # ignore whitespace
+        elif char not in whitespace:
+            currModifierString += char
+            
         
         # increment the index
         index += 1
@@ -284,9 +285,13 @@ def checkModifier(queue, modifierTree):
         # handle the modifiers
         elif isinstance(modifierPart, str):
             # count modifier 
-            if countModifierMatchObj := re.match("^([TILJSZO]+)([<>]|[<>=!]?=)(\d+)$", modifierPart):
+            if countModifierMatchObj := re.match("^([TILJSZO]+|\*)([<>]|[<>=!]?=)(\d+)$", modifierPart):
                 # get the different sections of the count modifier
                 countPieces, relationalOperator, num = countModifierMatchObj.groups()
+
+                # allow for wildcard
+                if countPieces == "*":
+                    countPieces = BAG
 
                 # get the boolean for the count modifier
                 countBool = handleCountModifier(countPieces, queue, relationalOperator, int(num))
@@ -364,51 +369,113 @@ def checkModifier(queue, modifierTree):
     return currBool
 
 # handle the whole extended sfinder pieces
-def handleExtendedSfinderFormatPieces(extendedSfinderFormatPieces, sortQueuesBool=True):
+def handleExtendedSfinderFormatPieces(extendedSfinderFormatPieces, sortQueuesBool=True, index=0, depth=0):
     '''Handle the whole extended sfinder pieces'''
 
-    # split by comma
-    extendedSfinderPiecesCommaSplit = extendedSfinderFormatPieces.split(",")
+    # delimiter between parts
+    delimiter = ","
 
-
-    # split by if there's a closing bracket
-    extendedSfinderPiecesParts = []
-    for part in extendedSfinderPiecesCommaSplit:
-        # split the part
-        splitedPart = re.split("(.+?{.*})", part)
-
-        # remove empty strings and extend to rest of the parts
-        extendedSfinderPiecesParts.extend(filter(None, splitedPart))
-
-    # holds the entire queues
+    # holds a list of the queues for each part
     queues = []
 
-    # for each part get the pieces and modifier
-    for part in extendedSfinderPiecesParts:
-        # get a match obj with regex for the pieces and modifier
-        matchWithModifier = re.match("^(.+){(.*)}$", part)
+    # holds a stack of queues as parsing through the expression
+    queueStack = []
 
-        # check if there was in fact a modifier to match
-        if matchWithModifier:
-            # get the pieces and modifier
-            sfinderFormatPieces, modifier = matchWithModifier.groups()
-        else:
-            # get the pieces and set modifier to None
-            sfinderFormatPieces, modifier = part, None
+    # go through each character
+    sfinderPieces = ""
+    while index < len(extendedSfinderFormatPieces):
+        char = extendedSfinderFormatPieces[index]
+
+        # delimiter
+        if char == delimiter:
+            # do the product of each part for one long queue
+            if len(queueStack) == 1:
+                queuesPart = queueStack[0]
+            else:
+                queuesPart = map("".join, product(*queueStack))
+
+            queues.append(queuesPart)
+
+            # empty stack
+            queueStack = []
+
+        # sub expression
+        elif char == "(":
+            # add the sfinder pieces so far
+            if sfinderPieces:
+                queueStack.append(getQueues(sfinderPieces))
+                sfinderPieces = ""
+
+            # run recursive for expressions in parentheses
+            subQueue, index = handleExtendedSfinderFormatPieces(extendedSfinderFormatPieces, sortQueuesBool=False, index=index + 1, depth=depth + 1)
+
+            # add this sub queue to the stack
+            queueStack.append(subQueue)
+            
+        elif char == ")":
+            # do the product of each part for one long queue
+            if sfinderPieces:
+                queues.append(getQueues(sfinderPieces))
+
+            # combine all the queues so far
+            queues = map("".join, product(*queues))
+
+            # return the queues and index
+            return queues, index
         
-        # get the queues
-        queuesPart = getQueues(sfinderFormatPieces, sortQueuesBool=False)
+        # handle modifier
+        elif char == "{":
+            # all the sfinder pieces so far
+            if sfinderPieces:
+                queueStack.append(getQueues(sfinderPieces))
+                sfinderPieces = ""
 
-        # create the modifier tree if there is a modifier
-        if modifier is not None:
+            # find where the closing backet is
+            closingBracketIndex = extendedSfinderFormatPieces.find("}", index)
+
+            # if can't find a closing bracket, issue
+            if closingBracketIndex == -1:
+                raise RuntimeError(f"Modifier didn't close '{extendedSfinderFormatPieces[index:]}'")
+            
+            # apply modifier
+
+            # get modifier
+            modifier = extendedSfinderFormatPieces[index + 1: closingBracketIndex]
+
             # make the modifier tree
             modifierTree = makeModifierTree(modifier)
 
+            # get the queues from combining the stack
+            queuesPart = map("".join, product(*queueStack))
+
             # filter the queues with the modifier tree
             queuesPart = filter(lambda x: checkModifier(x, modifierTree), queuesPart)
+
+            # set the stack with just this part
+            queueStack = [queuesPart]
+
+            # more index
+            index = closingBracketIndex
         
-        # append this queues part into the list of queues
-        queues.append(queuesPart)
+        # normal sfinder pieces
+        elif char not in whitespace:
+            sfinderPieces += char
+        
+        # increment index
+        index += 1
+    
+    # if there's any more sfinder pieces at the end
+    if sfinderPieces:
+        queues.append(getQueues(sfinderPieces))
+    
+    # do the product of each part for one long queue
+    if len(queueStack) == 1:
+        queuesPart = queueStack[0]
+    else:
+        queuesPart = map("".join, product(*queueStack))
+
+    # add this last part to the queues
+    queues.append(queuesPart)
     
     # do the product of each part for one long queue
     queues = map("".join, product(*queues))
@@ -416,7 +483,6 @@ def handleExtendedSfinderFormatPieces(extendedSfinderFormatPieces, sortQueuesBoo
     # sort the queues
     if sortQueuesBool:
         queues = sortQueues(queues)
-        
 
     # return the queues as a generator object
     return queues
@@ -450,8 +516,7 @@ def main(customInput=argv[1:], printOut=True):
         print("\n".join(queues))
     else:
         # return the queues generator obj
-        return queues
-        
+        return queues        
 
 if __name__ == "__main__":
     # run the main function
