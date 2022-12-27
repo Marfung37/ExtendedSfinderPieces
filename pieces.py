@@ -2,6 +2,7 @@
 from sys import argv
 from itertools import product, permutations, chain
 from string import whitespace
+from functools import partial
 import re
 
 # bag constant
@@ -36,7 +37,7 @@ def getQueues(sfinderFormatPieces, sortQueuesBool=True):
     # check if there wasn't a mistake in the finding of parts
     if ''.join(map(''.join, sfinderFormatPiecesParts)) != sfinderFormatPieces:
         # doesn't match
-        raise RuntimeError("Bad input for sfinder format pieces")
+        raise Exception("Bad input for sfinder format pieces")
    
     # generate the queues
     queues = []
@@ -70,8 +71,8 @@ def getQueues(sfinderFormatPieces, sortQueuesBool=True):
                     queues.append(set(map("".join, permutations(actualPieces, permutateNum))))
                 else:
                     # error
-                    raise RuntimeError(f"{sfinderFormatPieces} has {piecesFormat + permutateFormat}"
-                                       f" even though {piecesFormat} has length {len(actualPieces)}")
+                    raise Exception(f"{sfinderFormatPieces} has {piecesFormat + permutateFormat}"
+                                    " even though {piecesFormat} has length {len(actualPieces)}")
         else:
             # 1 piece queues
             queues.append(set(actualPieces))
@@ -87,7 +88,7 @@ def getQueues(sfinderFormatPieces, sortQueuesBool=True):
     return queues
 
 # make tree of the modifier to allow for easier parsing
-def makeModifierTree(modifier, index=0, depth=0):
+def makeModifierTree(modifier, index=0, depth=0, returnLength=False):
     '''Make tree of the modifier'''
     # holds the tree
     modifierTree = []
@@ -102,33 +103,29 @@ def makeModifierTree(modifier, index=0, depth=0):
 
         # check if the char is the start of a regex expression
         if char == "/":
-            # current string should be empty after a boolean operator unless it's a !
-            if currModifierString != "!" and currModifierString != "":
-                raise RuntimeError(f"Unable to parse text before opening regex '{currModifierString}/'")
-
             try:
                 # get the index of closing regex /
                 closingSlashIndex = modifier.index("/", index + 1)
                 
-                # get the text in the regex and add it to the tree along with if there's a !
-                modifierTree.append(currModifierString + modifier[index: closingSlashIndex + 1])
-                currModifierString = ""
+                # get the text in the regex and add to the currModifierString
+                currModifierString += modifier[index: closingSlashIndex + 1]
 
                 # move index to end of the regex
                 index = closingSlashIndex
 
             # the closing slash wasn't found
             except ValueError:
-                raise RuntimeError(f"No closing slash for regex at '{modifier[index:]}'")
+                raise Exception(f"No closing slash for regex at '{modifier[index:]}'")
 
         # opening parentheses
         elif char == "(":
-            # current string should be empty after a boolean operator
-            if currModifierString:
-                raise RuntimeError(f"Unable to parse text before opening parentheses '{currModifierString}('")
-
             # handle the subtree with recursion
             subTree, i = makeModifierTree(modifier, index + 1, depth + 1)
+
+            # add any prefixes
+            if currModifierString:
+                subTree.insert(0, currModifierString)
+                currModifierString = ""
 
             # add the sub tree to the tree
             modifierTree.append(subTree)
@@ -148,13 +145,14 @@ def makeModifierTree(modifier, index=0, depth=0):
                 return modifierTree, index
             # on the main tree and error
             else:
-                raise RuntimeError(f"Missing opening parentheses with '{modifier[: index + 1]}'")
+                raise Exception(f"Missing opening parentheses with '{modifier[: index + 1]}'")
         
         # boolean operator
         elif char == "&" or char == "|":
-            # append the current string to tree
-            modifierTree.append(currModifierString)
-            currModifierString = ""
+            if currModifierString:
+                # append the current string to tree
+                modifierTree.append(currModifierString)
+                currModifierString = ""
 
             # if there's two & or |
             if modifier[index + 1] == char:
@@ -163,14 +161,29 @@ def makeModifierTree(modifier, index=0, depth=0):
                 index += 1
             # there's only one & or |
             else:
-                raise RuntimeError(f"Missing second character of '{char}'")
+                raise Exception(f"Missing second character of '{char}'")
         
+        # end of modifier
+        elif char == "}":
+            # append the final current string if on the main tree
+            if depth == 0:
+                if currModifierString:
+                    modifierTree.append(currModifierString)
+            # on a sub tree meaning no closing parentheses
+            else:
+                raise Exception(f"Missing closing parentheses")
+
+            # return the main tree
+            if returnLength:
+                return modifierTree, index
+            else:
+                return modifierTree
+
         # some other character
         # ignore whitespace
         elif char not in whitespace:
             currModifierString += char
             
-        
         # increment the index
         index += 1
     
@@ -180,10 +193,13 @@ def makeModifierTree(modifier, index=0, depth=0):
             modifierTree.append(currModifierString)
     # on a sub tree meaning no closing parentheses
     else:
-        raise RuntimeError(f"Missing closing parentheses")
+        raise Exception(f"Missing closing parentheses")
     
     # return the main tree
-    return modifierTree
+    if returnLength:
+        return modifierTree, index
+    else:
+        return modifierTree
 
 # handle operator in the modifier
 def handleOperatorInModifier(currBool, newBool, operator, modifierType):
@@ -198,10 +214,10 @@ def handleOperatorInModifier(currBool, newBool, operator, modifierType):
     else:
         # something went wrong
         errorPrefix = "Something went wrong when parsing leading to not catching no operator before a "
-        raise RuntimeError(errorPrefix + modifierType)
+        raise Exception(errorPrefix + modifierType)
 
 # handle the different operators for the count modifier
-def handleCountModifier(countPieces, queue, relationalOperator, num):
+def handleCountModifier(countPieces, queue, relationalOperator, num, setNotation=False):
     '''Handle the different operators for count modifier'''
 
     # check each piece
@@ -212,24 +228,36 @@ def handleCountModifier(countPieces, queue, relationalOperator, num):
         # handle all the possible operators
         if relationalOperator == "=" or relationalOperator == "==":
             if pieceCount != num:
-                return False
+                if not setNotation: return False
+            elif setNotation:
+                return True
         elif relationalOperator == "!=":
             if pieceCount == num:
-                return False
+                if not setNotation: return False
+            elif setNotation:
+                return True
         elif relationalOperator == "<":
             if pieceCount >= num:
-                return False
+                if not setNotation: return False
+            elif setNotation:
+                return True
         elif relationalOperator == ">":
             if pieceCount <= num:
-                return False
+                if not setNotation: return False
+            elif setNotation:
+                return True
         elif relationalOperator == "<=":
             if pieceCount > num:
-                return False
+                if not setNotation: return False
+            elif setNotation:
+                return True
         elif relationalOperator == ">=":
             if pieceCount < num:
-                return False
+                if not setNotation: return False
+            elif setNotation:
+                return True
     
-    return True
+    return not setNotation
 
 # handle the before operator
 def handleBeforeOperator(beforePieces, afterPieces, queue):
@@ -266,8 +294,31 @@ def checkModifier(queue, modifierTree):
     # for each modifier part in the tree
     for modifierPart in modifierTree:
         if isinstance(modifierPart, list):
+            # handle if there's an indexing or length
+            subQueue = queue
+            if sliceMatchObj := re.match("^(\d*-?\d+):$", modifierPart[0]):
+                # get the prefix part with indexing
+                piecesSliceIndex = sliceMatchObj.group(1)
+
+                # get the indicies
+                sliceIndicies = piecesSliceIndex.split("-")
+
+                # check if it's a length or two indices
+                if len(sliceIndicies) == 2:
+                    # start and end indicies
+                    subQueue = queue[int(sliceIndicies[0]): int(sliceIndicies[1])]
+                elif len(sliceIndicies) == 1:
+                    # end index or ie length
+                    subQueue = queue[: int(sliceIndicies[0])]
+                else:
+                    # bad notation with multiple hyphens
+                    raise Exception("Bad notation for index prefix with more than two hyphens")
+
+                # get new modifier part
+                modifierPart = modifierPart[1:]
+
             # get the boolean from the submodifier
-            subModifierCheck = checkModifier(queue, modifierPart)
+            subModifierCheck = checkModifier(subQueue, modifierPart)
 
             # get new current boolean
             currBool = handleOperatorInModifier(currBool, subModifierCheck, operator, "sub modifier")
@@ -284,17 +335,50 @@ def checkModifier(queue, modifierTree):
         
         # handle the modifiers
         elif isinstance(modifierPart, str):
+            # handle if there's an indexing or length
+            subQueue = queue
+            if sliceMatchObj := re.match("^(\d*-?\d+):(.+)$", modifierPart):
+                # get the prefix and the modifier part
+                piecesSliceIndex, modifierPart = sliceMatchObj.groups()
+
+                # get the indicies
+                sliceIndicies = piecesSliceIndex.split("-")
+
+                # check if it's a length or two indices
+                if len(sliceIndicies) == 2:
+                    # start and end indicies
+                    subQueue = queue[int(sliceIndicies[0]): int(sliceIndicies[1])]
+                else:
+                    # end index or ie length
+                    subQueue = queue[: int(sliceIndicies[0])]
+
             # count modifier 
-            if countModifierMatchObj := re.match("^([TILJSZO]+|\*)([<>]|[<>=!]?=)(\d+)$", modifierPart):
+            if countModifierMatchObj := re.match("^([\[\]TILJSZO*]+)([<>]|[<>=!]?=)(\d+)$", modifierPart):
                 # get the different sections of the count modifier
                 countPieces, relationalOperator, num = countModifierMatchObj.groups()
 
-                # allow for wildcard
-                if countPieces == "*":
-                    countPieces = BAG
+                # separate any set notation
+                countPiecesParts = filter(None, re.split("(\[[TILJSZO*]+\])", countPieces))
 
-                # get the boolean for the count modifier
-                countBool = handleCountModifier(countPieces, queue, relationalOperator, int(num))
+                # handle each part
+                for part in countPiecesParts:
+                    
+                    # set notation
+                    setNotation = False
+                    if part[0] == "[" and part[-1] == "]":
+                        setNotation = True
+                        part = part[1:-1]
+
+                    # allow for wildcard
+                    if part == "*":
+                        part = BAG
+
+                    # get the boolean for the count modifier
+                    countBool = handleCountModifier(part, subQueue, relationalOperator, int(num), setNotation=setNotation)
+                    
+                    # as it ands all the count bools then if there's ever a False then entire thing is False
+                    if not countBool:
+                        break
 
                 # get new current boolean
                 currBool = handleOperatorInModifier(currBool, countBool, operator, "count modifier")
@@ -315,7 +399,7 @@ def checkModifier(queue, modifierTree):
                 beforePieces, afterPieces = beforeModifierMatchObj.groups()
 
                 # get the boolean for if the queue does match the before modifier
-                beforeBool = handleBeforeOperator(beforePieces, afterPieces, queue)
+                beforeBool = handleBeforeOperator(beforePieces, afterPieces, subQueue)
 
                 # get new current boolean
                 currBool = handleOperatorInModifier(currBool, beforeBool, operator, "before modifier")
@@ -336,7 +420,7 @@ def checkModifier(queue, modifierTree):
                 negate, regexPattern = regexModifierMatchObj.groups()
 
                 # get the boolean for if the queue matches the regex pattern
-                regexBool = bool(re.match(regexPattern, queue))
+                regexBool = bool(re.match(regexPattern, subQueue))
                 if negate == "!":
                     regexBool = not regexBool
 
@@ -359,11 +443,11 @@ def checkModifier(queue, modifierTree):
 
             else:
                 # something went wrong
-                raise RuntimeError("Something went wrong when parsing leading to no match to modifiers or operator")
+                raise Exception("Something went wrong when parsing leading to no match to modifiers or operator")
         
         else:
             # something went wrong
-            raise RuntimeError("Something went wrong leading to some modifier that isn't a string or list in the modifier tree")
+            raise Exception("Something went wrong leading to some modifier that isn't a string or list in the modifier tree")
 
     # return the boolean
     return currBool
@@ -388,6 +472,11 @@ def handleExtendedSfinderFormatPieces(extendedSfinderFormatPieces, sortQueuesBoo
 
         # delimiter
         if char == delimiter:
+            # all the sfinder pieces so far
+            if sfinderPieces:
+                queueStack.append(getQueues(sfinderPieces))
+                sfinderPieces = ""
+            
             # do the product of each part for one long queue
             if len(queueStack) == 1:
                 queuesPart = queueStack[0]
@@ -413,9 +502,12 @@ def handleExtendedSfinderFormatPieces(extendedSfinderFormatPieces, sortQueuesBoo
             queueStack.append(subQueue)
             
         elif char == ")":
-            # do the product of each part for one long queue
+            # all the sfinder pieces so far
             if sfinderPieces:
-                queues.append(getQueues(sfinderPieces))
+                queueStack.append(getQueues(sfinderPieces))
+
+            # combine everything in the stack
+            queues.append(map("".join, product(*queueStack)))
 
             # combine all the queues so far
             queues = map("".join, product(*queues))
@@ -429,33 +521,25 @@ def handleExtendedSfinderFormatPieces(extendedSfinderFormatPieces, sortQueuesBoo
             if sfinderPieces:
                 queueStack.append(getQueues(sfinderPieces))
                 sfinderPieces = ""
-
-            # find where the closing backet is
-            closingBracketIndex = extendedSfinderFormatPieces.find("}", index)
-
-            # if can't find a closing bracket, issue
-            if closingBracketIndex == -1:
-                raise RuntimeError(f"Modifier didn't close '{extendedSfinderFormatPieces[index:]}'")
             
-            # apply modifier
-
-            # get modifier
-            modifier = extendedSfinderFormatPieces[index + 1: closingBracketIndex]
-
             # make the modifier tree
-            modifierTree = makeModifierTree(modifier)
+            modifierTree, modifierLength = makeModifierTree(extendedSfinderFormatPieces[index + 1:], returnLength=True)
+
+            # if the length makes it the entire string
+            if index + modifierLength + 1 == len(extendedSfinderFormatPieces):
+                raise Exception(f"Modifier didn't close '{extendedSfinderFormatPieces[index:]}'")
 
             # get the queues from combining the stack
             queuesPart = map("".join, product(*queueStack))
 
             # filter the queues with the modifier tree
-            queuesPart = filter(lambda x: checkModifier(x, modifierTree), queuesPart)
+            queuesPart = filter(partial(checkModifier, modifierTree=modifierTree), queuesPart)
 
             # set the stack with just this part
             queueStack = [queuesPart]
 
             # more index
-            index = closingBracketIndex
+            index += modifierLength + 1
         
         # normal sfinder pieces
         elif char not in whitespace:
@@ -469,10 +553,7 @@ def handleExtendedSfinderFormatPieces(extendedSfinderFormatPieces, sortQueuesBoo
         queues.append(getQueues(sfinderPieces))
     
     # do the product of each part for one long queue
-    if len(queueStack) == 1:
-        queuesPart = queueStack[0]
-    else:
-        queuesPart = map("".join, product(*queueStack))
+    queuesPart = map("".join, product(*queueStack))
 
     # add this last part to the queues
     queues.append(queuesPart)
@@ -509,7 +590,7 @@ def main(customInput=argv[1:], printOut=True):
         queues.append(queuesPart)
 
     # sort the queues
-    queues = sortQueues(chain(*queues))
+    queues = sortQueues(set(chain(*queues)))
         
     if printOut:
         # print out the queues
