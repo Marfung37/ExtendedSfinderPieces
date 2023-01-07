@@ -260,7 +260,7 @@ def handleCountModifier(countPieces, queue, relationalOperator, num, setNotation
     return not setNotation
 
 # handle the before operator
-def handleBeforeOperator(beforePieces, afterPieces, queue):
+def handleBeforeOperator(beforePieces, afterPieces, queue, setNotation=False):
     '''Handle the before operator'''
     beforePieces = list(beforePieces)
 
@@ -272,6 +272,10 @@ def handleBeforeOperator(beforePieces, afterPieces, queue):
             return False
         # check if it's a before piece
         elif piece in beforePieces:
+            # if setNotation then any piece is fine as long as it's before
+            if setNotation:
+                return True
+
             # remove this piece from the before pieces
             beforePieces.remove(piece)
 
@@ -353,16 +357,15 @@ def checkModifier(queue, modifierTree):
                     subQueue = queue[: int(sliceIndicies[0])]
 
             # count modifier 
-            if countModifierMatchObj := re.match("^([\[\]TILJSZO*]+)([<>]|[<>=!]?=)(\d+)$", modifierPart):
+            if countModifierMatchObj := re.match("^(!?)([\[\]TILJSZO*]+)([<>]|[<>=!]?=)(\d+)$", modifierPart):
                 # get the different sections of the count modifier
-                countPieces, relationalOperator, num = countModifierMatchObj.groups()
+                negate, countPieces, relationalOperator, num = countModifierMatchObj.groups()
 
                 # separate any set notation
                 countPiecesParts = filter(None, re.split("(\[[TILJSZO*]+\])", countPieces))
 
                 # handle each part
                 for part in countPiecesParts:
-                    
                     # set notation
                     setNotation = False
                     if part[0] == "[" and part[-1] == "]":
@@ -376,9 +379,13 @@ def checkModifier(queue, modifierTree):
                     # get the boolean for the count modifier
                     countBool = handleCountModifier(part, subQueue, relationalOperator, int(num), setNotation=setNotation)
                     
-                    # as it ands all the count bools then if there's ever a False then entire thing is False
+                    # if any part is False then entire thing is False
                     if not countBool:
                         break
+                
+                # negate if there's a exclamation symbol
+                if negate:
+                    countBool = not countBool
 
                 # get new current boolean
                 currBool = handleOperatorInModifier(currBool, countBool, operator, "count modifier")
@@ -394,12 +401,27 @@ def checkModifier(queue, modifierTree):
                 operator = ""
             
             # before modifier
-            elif beforeModifierMatchObj := re.match("^([TILJSZO]+)<([TILJSZO]+)$", modifierPart):
+            elif beforeModifierMatchObj := re.match("^([\[\]TILJSZO*]+)<([TILJSZO]+)$", modifierPart):
                 # get the before and after pieces
                 beforePieces, afterPieces = beforeModifierMatchObj.groups()
 
-                # get the boolean for if the queue does match the before modifier
-                beforeBool = handleBeforeOperator(beforePieces, afterPieces, subQueue)
+                # separate any set notation
+                beforePiecesParts = filter(None, re.split("(\[[TILJSZO*]+\])", beforePieces))
+
+                for part in beforePiecesParts:
+                    # set notation
+                    setNotation = False
+                    if part[0] == "[" and part[-1] == "]":
+                        setNotation = True
+                        part = part[1:-1]
+
+                    # get the boolean for if the queue does match the before modifier
+                    beforeBool = handleBeforeOperator(beforePieces, afterPieces, subQueue, setNotation=setNotation)
+
+                    # if any part is False then entire thing is False
+                    if not beforeBool:
+                        break
+
 
                 # get new current boolean
                 currBool = handleOperatorInModifier(currBool, beforeBool, operator, "before modifier")
@@ -420,7 +442,7 @@ def checkModifier(queue, modifierTree):
                 negate, regexPattern = regexModifierMatchObj.groups()
 
                 # get the boolean for if the queue matches the regex pattern
-                regexBool = bool(re.match(regexPattern, subQueue))
+                regexBool = bool(re.search(regexPattern, subQueue))
                 if negate == "!":
                     regexBool = not regexBool
 
@@ -569,9 +591,12 @@ def handleExtendedSfinderFormatPieces(extendedSfinderFormatPieces, sortQueuesBoo
     return queues
 
 # handle user input and runs the program
-def main(customInput=argv[1:], printOut=True):
+def extendPieces(customInput=argv[1:], printOut=False):
     '''Main function for handling user input and program'''
     
+    if not isinstance(customInput, list):
+        raise SyntaxError("customInput for extendPieces must be a list")
+
     # get the user input
     userInput = customInput
 
@@ -592,13 +617,11 @@ def main(customInput=argv[1:], printOut=True):
     # sort the queues
     queues = sortQueues(set(chain(*queues)))
         
-    if printOut:
-        # print out the queues
-        print("\n".join(queues))
-    else:
-        # return the queues generator obj
-        return queues        
+    # return the queues generator obj
+    return queues        
 
 if __name__ == "__main__":
     # run the main function
-    main()
+    queues = extendPieces()
+
+    print("\n".join(queues))
