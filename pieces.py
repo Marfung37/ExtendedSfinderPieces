@@ -216,6 +216,40 @@ def handleOperatorInModifier(currBool, newBool, operator, modifierType):
         errorPrefix = "Something went wrong when parsing leading to not catching no operator before a "
         raise Exception(errorPrefix + modifierType)
 
+# handle prefixes in modifier
+def handlePrefixesInModifier(modifierPart, queue):
+    hasPrefixes = True
+    subQueue = queue
+    negate = False
+    while hasPrefixes:
+        # handle if there's an indexing or length
+        if sliceMatchObj := re.match("^(\d*-?\d+):(.+)$", modifierPart):
+            # get the prefix and the modifier part
+            piecesSliceIndex, modifierPart = sliceMatchObj.groups()
+
+            # get the indicies
+            sliceIndicies = piecesSliceIndex.split("-")
+
+            # check if it's a length or two indices
+            if len(sliceIndicies) == 2:
+                # start and end indicies
+                subQueue = queue[int(sliceIndicies[0]): int(sliceIndicies[1])]
+            else:
+                # end index or ie length
+                subQueue = queue[: int(sliceIndicies[0])]
+        
+        # handle not modifier
+        elif modifierPart[0] == "!":
+            # flip not modifier
+            negate = not negate
+            modifierPart = modifierPart[1:]
+        
+        else:
+            hasPrefixes = False
+
+    return modifierPart, subQueue, negate
+
+
 # handle the different operators for the count modifier
 def handleCountModifier(countPieces, queue, relationalOperator, num, setNotation=False):
     '''Handle the different operators for count modifier'''
@@ -260,20 +294,40 @@ def handleCountModifier(countPieces, queue, relationalOperator, num, setNotation
     return not setNotation
 
 # handle the before operator
-def handleBeforeOperator(beforePieces, afterPieces, queue, setNotation=False):
+def handleBeforeOperator(beforePieces, afterPieces, queue):
     '''Handle the before operator'''
     beforePieces = list(beforePieces)
+    afterPieces = list(afterPieces)
+
+    # set notation
+    beforeSetNotation = False
+    if beforePieces[0] == "[" and beforePieces[-1] == "]":
+        beforeSetNotation = True
+        beforePieces = beforePieces[1:-1]
+    
+    afterSetNotation = False
+    if afterPieces[0] == "[" and afterPieces[-1] == "]":
+        afterSetNotation = True
+        afterPieces = afterPieces[1:-1]
 
     # tries to match all the pieces in beforePieces before seeing any of the after pieces
     for piece in queue:
         # check if it's an after piece
         if piece in afterPieces:
-            # hit a after piece before getting through all the before pieces
-            return False
+            if afterSetNotation:
+                # remove this piece from the after pieces
+                afterPieces.remove(piece)
+
+                if not afterPieces:
+                    return False
+            else: 
+                # hit a after piece before getting through all the before pieces
+                return False
+            
         # check if it's a before piece
         elif piece in beforePieces:
             # if setNotation then any piece is fine as long as it's before
-            if setNotation:
+            if beforeSetNotation:
                 return True
 
             # remove this piece from the before pieces
@@ -298,31 +352,12 @@ def checkModifier(queue, modifierTree):
     # for each modifier part in the tree
     for modifierPart in modifierTree:
         if isinstance(modifierPart, list):
-            # handle if there's an indexing or length
-            subQueue = queue
-            if sliceMatchObj := re.match("^(\d*-?\d+):$", modifierPart[0]):
-                # get the prefix part with indexing
-                piecesSliceIndex = sliceMatchObj.group(1)
-
-                # get the indicies
-                sliceIndicies = piecesSliceIndex.split("-")
-
-                # check if it's a length or two indices
-                if len(sliceIndicies) == 2:
-                    # start and end indicies
-                    subQueue = queue[int(sliceIndicies[0]): int(sliceIndicies[1])]
-                elif len(sliceIndicies) == 1:
-                    # end index or ie length
-                    subQueue = queue[: int(sliceIndicies[0])]
-                else:
-                    # bad notation with multiple hyphens
-                    raise Exception("Bad notation for index prefix with more than two hyphens")
-
-                # get new modifier part
-                modifierPart = modifierPart[1:]
+            
+            # get the info from prefixes
+            modifierPart[0], subQueue, negate = handlePrefixesInModifier(modifierPart[0], queue)
 
             # get the boolean from the submodifier
-            subModifierCheck = checkModifier(subQueue, modifierPart)
+            subModifierCheck = negate ^ checkModifier(subQueue, modifierPart)
 
             # get new current boolean
             currBool = handleOperatorInModifier(currBool, subModifierCheck, operator, "sub modifier")
@@ -339,27 +374,13 @@ def checkModifier(queue, modifierTree):
         
         # handle the modifiers
         elif isinstance(modifierPart, str):
-            # handle if there's an indexing or length
-            subQueue = queue
-            if sliceMatchObj := re.match("^(\d*-?\d+):(.+)$", modifierPart):
-                # get the prefix and the modifier part
-                piecesSliceIndex, modifierPart = sliceMatchObj.groups()
-
-                # get the indicies
-                sliceIndicies = piecesSliceIndex.split("-")
-
-                # check if it's a length or two indices
-                if len(sliceIndicies) == 2:
-                    # start and end indicies
-                    subQueue = queue[int(sliceIndicies[0]): int(sliceIndicies[1])]
-                else:
-                    # end index or ie length
-                    subQueue = queue[: int(sliceIndicies[0])]
+            # handle prefixes
+            modifierPart, subQueue, negate = handlePrefixesInModifier(modifierPart, queue)
 
             # count modifier 
-            if countModifierMatchObj := re.match("^(!?)([\[\]TILJSZO*]+)([<>]|[<>=!]?=)(\d+)$", modifierPart):
+            if countModifierMatchObj := re.match("^([\[\]TILJSZO*]+)([<>]|[<>=!]?=)(\d+)$", modifierPart):
                 # get the different sections of the count modifier
-                negate, countPieces, relationalOperator, num = countModifierMatchObj.groups()
+                countPieces, relationalOperator, num = countModifierMatchObj.groups()
 
                 # separate any set notation
                 countPiecesParts = filter(None, re.split("(\[[TILJSZO*]+\])", countPieces))
@@ -382,13 +403,9 @@ def checkModifier(queue, modifierTree):
                     # if any part is False then entire thing is False
                     if not countBool:
                         break
-                
-                # negate if there's a exclamation symbol
-                if negate:
-                    countBool = not countBool
 
                 # get new current boolean
-                currBool = handleOperatorInModifier(currBool, countBool, operator, "count modifier")
+                currBool = handleOperatorInModifier(currBool, negate ^ countBool, operator, "count modifier")
 
                 # if currBool is False and the rest of the tree are and (which should be common), then return False directly
                 if not currBool:
@@ -401,30 +418,26 @@ def checkModifier(queue, modifierTree):
                 operator = ""
             
             # before modifier
-            elif beforeModifierMatchObj := re.match("^([\[\]TILJSZO*]+)<([TILJSZO]+)$", modifierPart):
+            elif beforeModifierMatchObj := re.match("^([\[\]TILJSZO*]+)<([\[\]TILJSZO*]+)$", modifierPart):
                 # get the before and after pieces
                 beforePieces, afterPieces = beforeModifierMatchObj.groups()
 
                 # separate any set notation
                 beforePiecesParts = filter(None, re.split("(\[[TILJSZO*]+\])", beforePieces))
+                afterPiecesParts = filter(None, re.split("(\[[TILJSZO*]+\])", afterPieces))
 
-                for part in beforePiecesParts:
-                    # set notation
-                    setNotation = False
-                    if part[0] == "[" and part[-1] == "]":
-                        setNotation = True
-                        part = part[1:-1]
+                for bPart in beforePiecesParts:
+                    for aPart in afterPiecesParts:
 
-                    # get the boolean for if the queue does match the before modifier
-                    beforeBool = handleBeforeOperator(beforePieces, afterPieces, subQueue, setNotation=setNotation)
+                        # get the boolean for if the queue does match the before modifier
+                        beforeBool = handleBeforeOperator(bPart, aPart, subQueue)
 
-                    # if any part is False then entire thing is False
-                    if not beforeBool:
-                        break
-
+                        # if any part is False then entire thing is False
+                        if not beforeBool:
+                            break
 
                 # get new current boolean
-                currBool = handleOperatorInModifier(currBool, beforeBool, operator, "before modifier")
+                currBool = handleOperatorInModifier(currBool, negate ^ beforeBool, operator, "before modifier")
 
                 # if currBool is False and the rest of the tree are and (which should be common), then return False directly
                 if not currBool:
@@ -437,14 +450,12 @@ def checkModifier(queue, modifierTree):
                 operator = ""
 
             # regex modifier
-            elif regexModifierMatchObj := re.match("(!?)/(.+)/", modifierPart):
+            elif regexModifierMatchObj := re.match("/(.+)/", modifierPart):
                 # get the negate and regex pattern
                 negate, regexPattern = regexModifierMatchObj.groups()
 
                 # get the boolean for if the queue matches the regex pattern
-                regexBool = bool(re.search(regexPattern, subQueue))
-                if negate == "!":
-                    regexBool = not regexBool
+                regexBool = negate ^ bool(re.search(regexPattern, subQueue))
 
                 # get new current boolean
                 currBool = handleOperatorInModifier(currBool, regexBool, operator, "regex modifier")
