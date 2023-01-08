@@ -456,7 +456,7 @@ def checkModifier(queue, modifierTree):
             # regex modifier
             elif regexModifierMatchObj := re.match("/(.+)/", modifierPart):
                 # get the negate and regex pattern
-                negate, regexPattern = regexModifierMatchObj.groups()
+                regexPattern = regexModifierMatchObj.groups()
 
                 # get the boolean for if the queue matches the regex pattern
                 regexBool = negate ^ bool(re.search(regexPattern, subQueue))
