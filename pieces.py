@@ -223,7 +223,7 @@ def handlePrefixesInModifier(modifierPart, queue):
     negate = False
     while hasPrefixes:
         # handle if there's an indexing or length
-        if sliceMatchObj := re.match("^(\d*-?\d+):(.+)$", modifierPart):
+        if sliceMatchObj := re.match("^(\d*-?\d+):(.*)$", modifierPart):
             # get the prefix and the modifier part
             piecesSliceIndex, modifierPart = sliceMatchObj.groups()
 
@@ -237,6 +237,9 @@ def handlePrefixesInModifier(modifierPart, queue):
             else:
                 # end index or ie length
                 subQueue = queue[: int(sliceIndicies[0])]
+            
+            if not modifierPart:
+                break
         
         # handle not modifier
         elif modifierPart[0] == "!":
@@ -354,7 +357,8 @@ def checkModifier(queue, modifierTree):
         if isinstance(modifierPart, list):
             
             # get the info from prefixes
-            modifierPart[0], subQueue, negate = handlePrefixesInModifier(modifierPart[0], queue)
+            subQueue, negate = handlePrefixesInModifier(modifierPart[0], queue)[1:]
+            modifierPart = modifierPart[1:]
 
             # get the boolean from the submodifier
             subModifierCheck = negate ^ checkModifier(subQueue, modifierPart)
