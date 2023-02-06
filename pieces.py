@@ -123,9 +123,8 @@ def makeModifierTree(modifier, index=0, depth=0, returnLength=False):
             subTree, i = makeModifierTree(modifier, index + 1, depth + 1)
 
             # add any prefixes
-            if currModifierString:
-                subTree.insert(0, currModifierString)
-                currModifierString = ""
+            subTree.insert(0, currModifierString)
+            currModifierString = ""
 
             # add the sub tree to the tree
             modifierTree.append(subTree)
@@ -218,7 +217,7 @@ def handleOperatorInModifier(currBool, newBool, operator, modifierType):
 
 # handle prefixes in modifier
 def handlePrefixesInModifier(modifierPart, queue):
-    hasPrefixes = True
+    hasPrefixes = bool(modifierPart) # if modifier part is empty or not
     subQueue = queue
     negate = False
     while hasPrefixes:
@@ -238,17 +237,18 @@ def handlePrefixesInModifier(modifierPart, queue):
                 # end index or ie length
                 subQueue = queue[: int(sliceIndicies[0])]
             
-            if not modifierPart:
-                break
+            hasPrefixes = bool(modifierPart) # if modifier part is empty or not
         
         # handle not modifier
         elif modifierPart[0] == "!":
             # flip not modifier
             negate = not negate
             modifierPart = modifierPart[1:]
+
+            hasPrefixes = bool(modifierPart) # if modifier part is empty or not
         
         else:
-            hasPrefixes = False
+            hasPrefixes = False 
 
     return modifierPart, subQueue, negate
 
@@ -456,8 +456,8 @@ def checkModifier(queue, modifierTree):
             # regex modifier
             elif regexModifierMatchObj := re.match("/(.+)/", modifierPart):
                 # get the negate and regex pattern
-                regexPattern = regexModifierMatchObj.groups()
-
+                regexPattern = regexModifierMatchObj.group(1)
+                
                 # get the boolean for if the queue matches the regex pattern
                 regexBool = negate ^ bool(re.search(regexPattern, subQueue))
 
