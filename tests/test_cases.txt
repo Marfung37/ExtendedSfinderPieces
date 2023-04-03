@@ -1,0 +1,19 @@
+# sfinder input
+*p3
+[SZ]!
+*
+[^LTJ]
+[^ILTJ]!
+[^TILJSZO]!
+[TILJSZO]
+[*]
+[!]
+*,*
+**
+[SZ];[IL]!
+[SZ]p3
+
+# simple modifiers (1 proposition)
+
+
+*!{3:!(TI[LJO]=1 || TLJ=1 || I[SZ]=1)}

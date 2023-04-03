@@ -12,10 +12,12 @@ The modifier applies to the pieces
 To separate parts to be modify and not, delimitate with commas  
 Parentheses are supported for applying a modifier on pieces already modified  
 Use semicolons to add different extended sfinder pieces into same list  
+Use <> to input a file instead of pieces, which can include comments and extendPieces format
   
 Ex1: `SZ,Z*p2{modifier}` The modifier will apply to only the Z\*p2  
 Ex2: `(SZ,Z*p2){modifier}` The modifier will apply to SZ,Z*p2  
 Ex3: `pieces1{modifier1};pieces2{modifier2}` Using semicolons  
+Ex4: `T<output/patterns.txt>{modifer1}` Inputting a file as queues
 
 ## Sfinder Pieces
 The `[]` in the sfinder pieces are able to handle duplicate pieces  

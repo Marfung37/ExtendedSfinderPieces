@@ -25,10 +25,10 @@ def sortQueues(queues):
 
 # get the pieces from the normal sfinder format
 def getQueues(sfinderFormatPieces, sortQueuesBool=True):
-    '''Get the pieces from the normal sfinder format'''
+    '''Get the pieces from the normal sfinder format or inputted files'''
 
     # two sections with prefix of pieces and suffix of permutate
-    prefixPattern = "([*TILJSZO]|\[\^?[TILJSZO]+\])"
+    prefixPattern = "([*TILJSZO]|\[\^?[TILJSZO]+\]|<.*>)"
     suffixPattern = "(p[1-7]|!)?"
     
     # regex find all the parts
@@ -48,11 +48,28 @@ def getQueues(sfinderFormatPieces, sortQueuesBool=True):
         if len(piecesFormat) == 1:
             actualPieces = piecesFormat if piecesFormat != "*" else BAG
         # is a set of pieces
-        else:
+        elif re.match("\[\^?([TILJSZO]+)\]", piecesFormat):
             actualPieces = re.match("\[\^?([TILJSZO]+)\]", piecesFormat).group(1)
 
             if piecesFormat[1] == "^":
                 actualPieces = "".join(set(BAG) - set(actualPieces))
+        elif re.match("<.*>", piecesFormat):
+            filename = piecesFormat[1:-1]
+
+            queueLines = []
+            with open(filename, "r") as infile:
+
+                for line in infile:
+                    # ignore comments or whitespace
+                    line = line.strip()
+                    if line.startswith("#") or not line:
+                        continue
+
+                    queueLines.append(line)
+            
+            queues.append(extendPieces(queueLines))
+
+            continue
             
         # actual pieces is generated
 
