@@ -51,7 +51,7 @@ def parse_input(input_pattern: str, bsort_queues: bool = True):
     """
 
     # two sections with prefix of pieces and suffix of permutate
-    prefix_pattern = r"([*TILJSZO]|\[\^?[TILJSZO]+\]|<.*>)"
+    prefix_pattern = r"([*TILJSZO]|\[\^?[TILJSZO]*(?:\[[TILJSZO]+\])?[TILJSZO]*\]|<.*>)"
     suffix_pattern = r"(p[1-7]|!)?"
 
     # regex find all the parts
@@ -72,20 +72,31 @@ def parse_input(input_pattern: str, bsort_queues: bool = True):
         # just a wildcard or a piece
         if len(pieces_format) == 1:
             if pieces_format == "*":
-                actual_pieces = BAG
+                actual_pieces = [BAG]
             else:
-                actual_pieces = pieces_format  # a piece
+                actual_pieces = [pieces_format]  # a piece
 
         # is a set of pieces
         elif (
-            tmp_match_obj := re.match(r"\[\^?([TILJSZO]+)\]", pieces_format)
+            tmp_match_obj := re.match(r"\[\^?([TILJSZO]*(\[[TILJSZO]+\])?[TILJSZO]*)\]", pieces_format)
         ) is not None:
-            actual_pieces = tmp_match_obj.group(1)
+            pieces_set = tmp_match_obj.group(1)
 
+            if pieces_set == "":
+                raise RuntimeError(f"Empty actual pieces from {pieces_format}")
+
+            if (tmp_match_obj := re.search(r"(\[[TILJSZO]+\])", pieces_set)) is not None:
+                nested_set = tmp_match_obj.group(1)
+                other_pieces = pieces_set[0:tmp_match_obj.start(1)] + pieces_set[tmp_match_obj.start(1) + len(nested_set):]
+                actual_pieces = []
+                for piece in nested_set[1:-1]:
+                    actual_pieces.append(other_pieces + piece)
+            else:
+                actual_pieces = [pieces_set]
+                    
             if pieces_format[1] == "^":
-                actual_pieces = "".join(set(BAG) - set(actual_pieces))
-                if actual_pieces == "":
-                    raise RuntimeError(f"Empty actual pieces from {pieces_format}")
+                for i in range(len(actual_pieces)):
+                    actual_pieces[i] = "".join(set(BAG) - set(actual_pieces[i]))
 
         # is a file
         elif tmp_match_obj := re.match("<.*>", pieces_format) is not None:
@@ -116,27 +127,26 @@ def parse_input(input_pattern: str, bsort_queues: bool = True):
 
             # ! ending meaning permutation of the pieces
             if permutate_format == "!":
-                queues.append(set(map("".join, permutations(actual_pieces))))
+                queues.append(set(map("".join, chain.from_iterable(map(permutations, actual_pieces)))))
 
             # some permute n ending
             else:
                 # get the number at the end after p
                 permutate_num = int(permutate_format[-1])
-
                 # as long as the number is at most the length of the pieces
-                if permutate_num <= len(actual_pieces):
+                if permutate_num <= len(actual_pieces[0]):
                     queues.append(
-                        set(map("".join, permutations(actual_pieces, permutate_num)))
+                        set(map("".join, chain.from_iterable(map(lambda x: permutations(x, permutate_num), actual_pieces))))
                     )
                 else:
                     # error
                     raise RuntimeError(
                         f"{input_pattern} has {permutate_format}"
-                        f" even though {pieces_format} has length {len(actual_pieces)}"
+                        f" even though {pieces_format} has length {len(actual_pieces[0])}"
                     )
         else:
             # 1 piece queues
-            queues.append(set(actual_pieces))
+            queues += [set(''.join(actual_pieces))]
 
     # do the product of each part for one long queue
     queues = map("".join, product(*queues))

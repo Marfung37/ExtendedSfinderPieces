@@ -21,8 +21,10 @@ Ex4: `T<output/patterns.txt>{modifer1}` Inputting a file as queues
 
 ## Sfinder Pieces
 The `[]` in the sfinder pieces are able to handle duplicate pieces  
+There can be nesting of `[]` to a depth of 1  
 
-Ex: `[SSZ]!` any permutation of the pieces SSZ
+Ex1: `[SSZ]!` any permutation of the pieces SSZ  
+Ex2: `[TI[LJ]]!` any permutation of TIL or TIJ  
 
 ## Modifiers
 Boolean expression operators, `&&`, `||`, and `!` are supported. Use parentheses to change order from left to right.  
