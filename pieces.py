@@ -51,7 +51,7 @@ def parse_input(input_pattern: str, bsort_queues: bool = True):
     """
 
     # two sections with prefix of pieces and suffix of permutate
-    prefix_pattern = r"([*TILJSZO]|\[\^?[TILJSZO]*(?:\[[TILJSZO]+\])?[TILJSZO]*\]|<.*>)"
+    prefix_pattern = r"([*TILJSZO]|\[\^?[TILJSZO]*(?:\[[TILJSZO]+\])*[TILJSZO]*\]|<.*>)"
     suffix_pattern = r"(p[1-7]|!)?"
 
     # regex find all the parts
@@ -78,19 +78,23 @@ def parse_input(input_pattern: str, bsort_queues: bool = True):
 
         # is a set of pieces
         elif (
-            tmp_match_obj := re.match(r"\[\^?([TILJSZO]*(\[[TILJSZO]+\])?[TILJSZO]*)\]", pieces_format)
+            tmp_match_obj := re.match(r"\[\^?([TILJSZO]*(\[[TILJSZO]+\])*[TILJSZO]*)\]", pieces_format)
         ) is not None:
             pieces_set = tmp_match_obj.group(1)
 
             if pieces_set == "":
                 raise RuntimeError(f"Empty actual pieces from {pieces_format}")
 
-            if (tmp_match_obj := re.search(r"(\[[TILJSZO]+\])", pieces_set)) is not None:
-                nested_set = tmp_match_obj.group(1)
-                other_pieces = pieces_set[0:tmp_match_obj.start(1)] + pieces_set[tmp_match_obj.start(1) + len(nested_set):]
-                actual_pieces = []
-                for piece in nested_set[1:-1]:
-                    actual_pieces.append(other_pieces + piece)
+            actual_pieces = []
+            if len(tmp_match_obj := re.findall(r"(\[[TILJSZO]+\])", pieces_set)) != 0:
+                subpieces = ["".join(re.split(r"\[[TILJSZO]+\]", pieces_set))]
+                for nested_set in tmp_match_obj:
+                    tmp_subpieces = []
+                    for piece in nested_set[1:-1]:
+                        for other_pieces in subpieces:
+                            tmp_subpieces.append(other_pieces + piece)
+                    subpieces = tmp_subpieces
+                actual_pieces = subpieces
             else:
                 actual_pieces = [pieces_set]
                     

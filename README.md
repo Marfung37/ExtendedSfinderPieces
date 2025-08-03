@@ -24,7 +24,7 @@ The `[]` in the sfinder pieces are able to handle duplicate pieces
 There can be nesting of `[]` to a depth of 1  
 
 Ex1: `[SSZ]!` any permutation of the pieces SSZ  
-Ex2: `[TI[LJ]]!` any permutation of TIL or TIJ  
+Ex2: `[TI[LJ][SZ]]!` any permutation of TILS, TIJS, TILZ, or TIJZ  
 
 ## Modifiers
 Boolean expression operators, `&&`, `||`, and `!` are supported. Use parentheses to change order from left to right.  
