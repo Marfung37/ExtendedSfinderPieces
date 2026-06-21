@@ -1,9 +1,10 @@
 import re
 from collections.abc import Callable
 import operator
+from .utils import tetris_order_key
 
 OPERATORS = {
-  '==': operator.eq,
+  '=': operator.eq,
   '!=': operator.ne,
   '<' : operator.lt,
   '>' : operator.gt,
@@ -12,16 +13,16 @@ OPERATORS = {
 }
 
 TOKEN_SPEC = [
+  ('RANGE_OP', r'\d+(?:-\d+)?:'),
+  ('PIECES',   r'(?:[TILJSZO*]|\[[TILJSZO*]+\])+'),
+  ('COMP_OP',  r'=|<=|>=|!=|=|<|>'),
+  ('NUMBER',   r'\d+'),
+  ('REGEX',    r'/[^/]+/'), # regex within forward slashes, ie /abc/
   ('OR',       r'\|\|'),
   ('AND',      r'&&'),
   ('NOT',      r'!'),
   ('LPAREN',   r'\('),
   ('RPAREN',   r'\)'),
-  ('RANGE_OP', r'\d+(?:-\d+)?:'),
-  ('PIECES',   r'(?:[TILJSZO*]|\[[TILJSZO*]+\])+'),
-  ('COMP_OP',  r'==|<=|>=|!=|=|<|>'),
-  ('NUMBER',   r'\d+'),
-  ('REGEX',    r'/[^/]+/'), # regex within forward slashes, ie /abc/
   ('WS',       r'\s+'),  # Skip whitespace
 ]
 MASTER_REGEX = '|'.join(f'(?P<{name}>{pattern})' for name, pattern in TOKEN_SPEC)
@@ -142,14 +143,14 @@ class Parser:
         if '*' in pieces_set:
           parsed_pieces.append(list('TILJSZO'))
         else:
-          parsed_pieces.append(list(pieces_set))
+          parsed_pieces.append(sorted(list(pieces_set), key=tetris_order_key))
       else:
         if duplicates:
           parsed_pieces.append(item)
         else:
           base_pieces.add(item)
     if not duplicates:
-      parsed_pieces.extend(base_pieces)
+      parsed_pieces.extend(sorted(list(base_pieces), key=tetris_order_key))
 
     return parsed_pieces
 
@@ -328,14 +329,14 @@ def evaluate_ast(node, queue: str) -> bool:
     comp_op = OPERATORS[node.op]
     for target in node.pieces:
       if isinstance(target, list):
-        # set of pieces: [LJ]=1 means that # of L + # of J = 1
-        actual_count = sum(queue.count(piece) for piece in target)
+        # set of pieces: [LJ]=1 means that # of L = 1 OR # of J = 1
+        result = any(comp_op(queue.count(piece), node.count) for piece in target)
       else:
         # single piece
-        actual_count = queue.count(target)
+        result = comp_op(queue.count(target), node.count)
 
-      # check with expected count
-      if not comp_op(actual_count, node.count):
+      # this piece part is not satisfied so short circuit as false
+      if not result:
         return False
     return True
 
