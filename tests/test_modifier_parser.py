@@ -113,11 +113,25 @@ def test_ast_parse(expression, expected):
     ("T<I[IS]", "TIS", True),
     ("T<I[IS]", "TIZ", True),
     ("T<I[IS]", "IT", False),
+    # regex modifier, mostly need to just check if can parse regex and evaluate it
+    ("/^T/", "TIL", True),
+    ("/^T/", "TSZ", True),
+    ("/^T/", "ITL", False),
+    ("/^T/", "LIT", False),
     # test range modifier
     ("4:(T=1)", "TIII", True),
     ("4:(T=1)", "IIIIT", False),  # T is at index 4 (outside range 0-4)
     ("3-7:(T=1)", "IIITIII", True),  # T is within index 3 to 7
     ("3-7:(T=1)", "TIIIIII", False),  # T is before index 3
+    # basic boolean logic works
+    ("[LJ]=1&&!LJ=1", "LJ", False),
+    ("[LJ]=1&&!LJ=1", "LI", True),
+    ("[LJ]=1&&!LJ=1", "IJ", True),
+    ("[LJ]=1&&!LJ=1", "IS", False),
+    ("([LJ]=1&&!LJ=1)||LJ=0", "LJ", False),
+    ("([LJ]=1&&!LJ=1)||LJ=0", "LI", True),
+    ("([LJ]=1&&!LJ=1)||LJ=0", "IJ", True),
+    ("([LJ]=1&&!LJ=1)||LJ=0", "IS", True),
   ],
 )
 def test_evaluate_ast(expression, queue_str, expected):
