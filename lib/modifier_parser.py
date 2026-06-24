@@ -4,57 +4,65 @@ import operator
 from .utils import tetris_order_key
 
 OPERATORS = {
-  '=': operator.eq,
-  '!=': operator.ne,
-  '<' : operator.lt,
-  '>' : operator.gt,
-  '<=': operator.le,
-  '>=': operator.ge,
+  "=": operator.eq,
+  "!=": operator.ne,
+  "<": operator.lt,
+  ">": operator.gt,
+  "<=": operator.le,
+  ">=": operator.ge,
 }
 
 TOKEN_SPEC = [
-  ('RANGE_OP', r'\d+(?:-\d+)?:'),
-  ('PIECES',   r'(?:[TILJSZO*]|\[[TILJSZO*]+\])+'),
-  ('COMP_OP',  r'=|<=|>=|!=|=|<|>'),
-  ('NUMBER',   r'\d+'),
-  ('REGEX',    r'/[^/]+/'), # regex within forward slashes, ie /abc/
-  ('OR',       r'\|\|'),
-  ('AND',      r'&&'),
-  ('NOT',      r'!'),
-  ('LPAREN',   r'\('),
-  ('RPAREN',   r'\)'),
-  ('WS',       r'\s+'),  # Skip whitespace
+  ("RANGE_OP", r"\d+(?:-\d+)?:"),
+  ("PIECES", r"(?:[TILJSZO*]|\[[TILJSZO*]+\])+"),
+  ("COMP_OP", r"=|<=|>=|!=|=|<|>"),
+  ("NUMBER", r"\d+"),
+  ("REGEX", r"/[^/]+/"),  # regex within forward slashes, ie /abc/
+  ("OR", r"\|\|"),
+  ("AND", r"&&"),
+  ("NOT", r"!"),
+  ("LPAREN", r"\("),
+  ("RPAREN", r"\)"),
+  ("WS", r"\s+"),  # Skip whitespace
 ]
-MASTER_REGEX = '|'.join(f'(?P<{name}>{pattern})' for name, pattern in TOKEN_SPEC)
+MASTER_REGEX = "|".join(f"(?P<{name}>{pattern})" for name, pattern in TOKEN_SPEC)
 token_re = re.compile(MASTER_REGEX)
 
 # expression to get individual piece or sets of pieces
-PIECES_REGEX = r'[TILJSZO*]|\[[TILJSZO*]+\]' 
+PIECES_REGEX = r"[TILJSZO*]|\[[TILJSZO*]+\]"
+
 
 class Token:
   def __init__(self, kind: str | None = None, value: str | None = None):
     self.kind = kind
     self.value = value
+
   def __repr__(self):
     return f"({self.kind}, '{self.value}')"
+
 
 class AST:
   pass
 
+
 class BinaryOp(AST):
   def __init__(self, left, op, right):
     self.left = left
-    self.op = op # Store the operator token or type
+    self.op = op  # Store the operator token or type
     self.right = right
+
   def __repr__(self):
     return f"({self.left} {self.op} {self.right})"
+
 
 class UnaryOp(AST):
   def __init__(self, op, expr):
     self.op = op
     self.expr = expr
+
   def __repr__(self):
     return f"({self.op} {self.expr})"
+
 
 class RangeLookup(AST):
   def __init__(self, start: int, end: int, expr: AST):
@@ -66,6 +74,7 @@ class RangeLookup(AST):
     range_str = f"{self.start}-{self.end}"
     return f"Range({range_str} -> {self.expr})"
 
+
 class CountLiteral(AST):
   def __init__(self, pieces: list[str | list[str]], op: str, count: int):
     self.pieces = pieces
@@ -75,29 +84,35 @@ class CountLiteral(AST):
   def __repr__(self):
     return f"Count({self.pieces} {self.op} {self.count})"
 
+
 class BeforeLiteral(AST):
-  def __init__(self, before_pieces: list[str | list[str]], after_pieces: list[str | list[str]]):
+  def __init__(
+    self, before_pieces: list[str | list[str]], after_pieces: list[str | list[str]]
+  ):
     self.before_pieces = before_pieces
     self.after_pieces = after_pieces
 
   def __repr__(self):
     return f"Before({self.before_pieces} < {self.after_pieces})"
 
+
 class RegexLiteral(AST):
   def __init__(self, value: str):
     self.value = value
+
   def __repr__(self):
     return f"Regex(`{self.value}`)"
+
 
 def tokenize(text):
   tokens = []
   for match in token_re.finditer(text):
     kind = match.lastgroup
     value = match.group()
-    if kind == 'WS':
+    if kind == "WS":
       continue  # skip whitespace
-    if kind == 'REGEX':
-      value = value[1:-1] # strip forward slashes
+    if kind == "REGEX":
+      value = value[1:-1]  # strip forward slashes
     tokens.append(Token(kind, value))
 
   if len(tokens) == 0:
@@ -105,10 +120,12 @@ def tokenize(text):
 
   return tokens
 
+
 class Parser:
   """
   Recursive Descent Parser with precedence OR, AND, NOT, ATOMIC
   """
+
   def __init__(self, lexer: Callable[[str], list[Token]] = tokenize):
     self._tokens = []
     self._pos = 0
@@ -124,24 +141,26 @@ class Parser:
     self._pos += 1
     return token
 
-  def _parse_pieces(self, raw_pieces: str, duplicates: bool = False) -> list[str | list[str]]:
+  def _parse_pieces(
+    self, raw_pieces: str, duplicates: bool = False
+  ) -> list[str | list[str]]:
     sub_patterns = re.findall(PIECES_REGEX, raw_pieces)
 
     base_pieces = set()
     parsed_pieces = []
     for item in sub_patterns:
       # expand wildcard
-      if item == '*':
+      if item == "*":
         if duplicates:
-          parsed_pieces.extend('TILJSZO')
+          parsed_pieces.extend("TILJSZO")
         else:
-          base_pieces |= set('TILJSZO')
-      elif item.startswith('['):
-        inner_raw_pieces = item.strip('[]')
+          base_pieces |= set("TILJSZO")
+      elif item.startswith("["):
+        inner_raw_pieces = item.strip("[]")
         # get all pieces within []
         pieces_set = set(inner_raw_pieces)
-        if '*' in pieces_set:
-          parsed_pieces.append(list('TILJSZO'))
+        if "*" in pieces_set:
+          parsed_pieces.append(list("TILJSZO"))
         else:
           parsed_pieces.append(sorted(list(pieces_set), key=tetris_order_key))
       else:
@@ -166,35 +185,35 @@ class Parser:
 
   def _parse_or(self) -> AST:
     left = self._parse_and()
-    while self._peek().kind == 'OR':
-      self._consume('OR')
+    while self._peek().kind == "OR":
+      self._consume("OR")
       right = self._parse_and()
-      left = BinaryOp(left, 'OR', right)
+      left = BinaryOp(left, "OR", right)
     return left
 
   def _parse_and(self) -> AST:
     left = self._parse_unary()
-    while self._peek().kind == 'AND':
-      self._consume('AND')
+    while self._peek().kind == "AND":
+      self._consume("AND")
       right = self._parse_unary()
-      left = BinaryOp(left, 'AND', right)
+      left = BinaryOp(left, "AND", right)
     return left
 
   def _parse_unary(self) -> AST:
     # NOT
-    if self._peek().kind == 'NOT':
-      self._consume('NOT')
+    if self._peek().kind == "NOT":
+      self._consume("NOT")
       expr = self._parse_unary()
-      return UnaryOp('NOT', expr)
+      return UnaryOp("NOT", expr)
 
     # range operator
-    if self._peek().kind == 'RANGE_OP':
-      range_expr = self._consume('RANGE_OP')
+    if self._peek().kind == "RANGE_OP":
+      range_expr = self._consume("RANGE_OP")
       if range_expr.value is None:
-        raise ValueError(f"No range expression found for RANGE_OP token")
+        raise ValueError("No range expression found for RANGE_OP token")
 
       expr = self._parse_unary()
-      endpoints = list(map(int, range_expr.value.rstrip(':').split('-')))
+      endpoints = list(map(int, range_expr.value.rstrip(":").split("-")))
       if len(endpoints) == 1:
         # only one endpoint given is the end
         return RangeLookup(0, endpoints[0], expr)
@@ -206,49 +225,59 @@ class Parser:
   def _parse_atom(self):
     token = self._peek()
     if token is None:
-      raise ValueError(f"Reached each of tokens too early")
+      raise ValueError("Reached each of tokens too early")
 
     # if parentheses
-    if token.kind == 'LPAREN':
-      self._consume('LPAREN')
+    if token.kind == "LPAREN":
+      self._consume("LPAREN")
       expr = self._parse_tokens()
-      self._consume('RPAREN')
+      self._consume("RPAREN")
       return expr
 
     # if regex
-    elif token.kind == 'REGEX':
-      regex_expr = self._consume('REGEX')
+    elif token.kind == "REGEX":
+      regex_expr = self._consume("REGEX")
       if regex_expr.value is None:
-        raise ValueError(f"No regex expression found for REGEX token")
-      return RegexLiteral(regex_expr.value) 
+        raise ValueError("No regex expression found for REGEX token")
+      return RegexLiteral(regex_expr.value)
 
-    elif token.kind == 'PIECES':
-      pieces = self._consume('PIECES')
+    elif token.kind == "PIECES":
+      pieces = self._consume("PIECES")
       if pieces.value is None:
-        raise ValueError(f"No pieces expression found for PIECES token")
-      op = self._consume('COMP_OP')
+        raise ValueError("No pieces expression found for PIECES token")
+      op = self._consume("COMP_OP")
       if op.value is None:
-        raise ValueError(f"No comparison operator found for COMP_OP token")
+        raise ValueError("No comparison operator found for COMP_OP token")
 
       next_token = self._peek()
       # if before
-      if next_token.kind == 'PIECES':
-        if op.value != '<':
-          raise ValueError(f"Comparison of pieces expression that isn't before operator")
-        after_pieces = self._consume('PIECES')
+      if next_token.kind == "PIECES":
+        if op.value != "<":
+          raise ValueError("Comparison of pieces expression that isn't before operator")
+        after_pieces = self._consume("PIECES")
         if after_pieces.value is None:
-          raise ValueError(f"No pieces expression found for PIECES token after noticing before modifier")
-        return BeforeLiteral(self._parse_pieces(pieces.value, True), self._parse_pieces(after_pieces.value, True))
-      elif next_token.kind == 'NUMBER':
-        count = self._consume('NUMBER')
+          raise ValueError(
+            "No pieces expression found for PIECES token after noticing before modifier"
+          )
+        return BeforeLiteral(
+          self._parse_pieces(pieces.value, True),
+          self._parse_pieces(after_pieces.value, True),
+        )
+      elif next_token.kind == "NUMBER":
+        count = self._consume("NUMBER")
         if count.value is None:
-          raise ValueError(f"No number found for NUMBER token after noticing count modifier")
-        return CountLiteral(self._parse_pieces(pieces.value), op.value, int(count.value))
+          raise ValueError(
+            "No number found for NUMBER token after noticing count modifier"
+          )
+        return CountLiteral(
+          self._parse_pieces(pieces.value), op.value, int(count.value)
+        )
       else:
         raise ValueError(f"Unexpected token after PIECES COMP_OP: {token}")
 
     else:
       raise ValueError(f"Unexpected token: {token}")
+
 
 def get_char_indices(queue_string: str) -> dict[str, list[int]]:
   """
@@ -259,6 +288,7 @@ def get_char_indices(queue_string: str) -> dict[str, list[int]]:
   for index, char in enumerate(queue_string):
     positions.setdefault(char, []).append(index)
   return positions
+
 
 def evaluate_before(node: BeforeLiteral, queue: str) -> bool:
   # get index of each piece
@@ -299,7 +329,7 @@ def evaluate_before(node: BeforeLiteral, queue: str) -> bool:
           elif b_indices[b_instance_idx] < a_indices[a_instance_idx]:
             inner_flag = True
             break
-        
+
         # short circuit as found a before piece that is before one of the after pieces
         if inner_flag:
           outer_flag = True
@@ -310,11 +340,12 @@ def evaluate_before(node: BeforeLiteral, queue: str) -> bool:
         return False
   return True
 
+
 # --- AST Evaluator ---
 # This function will traverse the AST and execute the boolean logic.
 def evaluate_ast(node, queue: str) -> bool:
   ###
-  # Atomic 
+  # Atomic
   ###
 
   if isinstance(node, RegexLiteral):
@@ -349,10 +380,10 @@ def evaluate_ast(node, queue: str) -> bool:
 
   # restrict range of queue to apply expr
   elif isinstance(node, RangeLookup):
-    return evaluate_ast(node.expr, queue[node.start: node.end])
+    return evaluate_ast(node.expr, queue[node.start : node.end])
 
   elif isinstance(node, UnaryOp):
-    if node.op == 'NOT':
+    if node.op == "NOT":
       return not evaluate_ast(node.expr, queue)
 
   elif isinstance(node, BinaryOp):
@@ -360,16 +391,17 @@ def evaluate_ast(node, queue: str) -> bool:
     left_val = evaluate_ast(node.left, queue)
 
     # short circuit if possible
-    if node.op == 'AND' and not left_val:
+    if node.op == "AND" and not left_val:
       return False
 
-    elif node.op == 'OR' and left_val:
+    elif node.op == "OR" and left_val:
       return True
 
     # evaluate and return right side otherwise
     return evaluate_ast(node.right, queue)
 
   raise ValueError(f"Unknown AST node type or operation: {type(node)}")
+
 
 if __name__ == "__main__":
   parser = Parser()
@@ -379,13 +411,13 @@ if __name__ == "__main__":
   print(parser.parse("[TLJ]IO=1||[TI][LJ]O=1", tokenize))
   print(parser.parse("3-5:I<J && 4:T=1 && !/^T/ && [TLJ]IO=1 || [TI][LJ]O=1", tokenize))
 
-  print(evaluate_ast(parser.parse('I<J'), 'IJ'))
-  print(evaluate_ast(parser.parse('I<J'), 'JI'))
-  print(evaluate_ast(parser.parse('II<J'), 'IJI'))
-  print(evaluate_ast(parser.parse('II<J'), 'IIJ'))
-  print(evaluate_ast(parser.parse('II<[LJ]'), 'IIJ'))
-  print(evaluate_ast(parser.parse('II<[LJ]'), 'IIL'))
-  print(evaluate_ast(parser.parse('[TI]<[LJ]'), 'TILJ'))
-  print(evaluate_ast(parser.parse('[TI]<[LJ]'), 'JTLI'))
-  print(evaluate_ast(parser.parse('[TI]<[LJ]'), 'LJTI'))
-  print(evaluate_ast(parser.parse('[TI]<[LJ]'), 'LIJT'))
+  print(evaluate_ast(parser.parse("I<J"), "IJ"))
+  print(evaluate_ast(parser.parse("I<J"), "JI"))
+  print(evaluate_ast(parser.parse("II<J"), "IJI"))
+  print(evaluate_ast(parser.parse("II<J"), "IIJ"))
+  print(evaluate_ast(parser.parse("II<[LJ]"), "IIJ"))
+  print(evaluate_ast(parser.parse("II<[LJ]"), "IIL"))
+  print(evaluate_ast(parser.parse("[TI]<[LJ]"), "TILJ"))
+  print(evaluate_ast(parser.parse("[TI]<[LJ]"), "JTLI"))
+  print(evaluate_ast(parser.parse("[TI]<[LJ]"), "LJTI"))
+  print(evaluate_ast(parser.parse("[TI]<[LJ]"), "LIJT"))
