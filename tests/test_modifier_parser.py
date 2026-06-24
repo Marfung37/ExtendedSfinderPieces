@@ -1,5 +1,5 @@
 import pytest
-from lib.modifier_parser import Parser, BeforeLiteral, evaluate_before, evaluate_ast
+from lib.modifier_parser import Parser, evaluate_ast
 
 parser = Parser()
 
@@ -27,50 +27,6 @@ parser = Parser()
 def test_ast_parse(expression, expected):
   print(str(parser.parse(expression)))
   assert str(parser.parse(expression)) == expected
-
-
-@pytest.mark.parametrize(
-  "node, queue, expected",
-  [
-    (BeforeLiteral(["T"], ["I"]), "TI", True),
-    (BeforeLiteral(["T"], ["I"]), "IT", False),
-    (BeforeLiteral(["I"], ["T"]), "TI", False),
-    (BeforeLiteral(["I"], ["T"]), "IT", True),
-    (BeforeLiteral(["T"], ["I"]), "II", False),
-    (BeforeLiteral(["I"], ["T"]), "II", True),
-    (BeforeLiteral(["T", ["S", "Z"]], ["I"]), "TSI", True),
-    (BeforeLiteral(["T", ["S", "Z"]], ["I"]), "TSZI", True),
-    (BeforeLiteral(["T", ["S", "Z"]], ["I"]), "TSIZ", True),
-    (BeforeLiteral(["T", ["S", "Z"]], ["I"]), "TISZ", False),
-    (BeforeLiteral(["T", ["S", "Z"]], ["I"]), "SZIT", False),
-    (BeforeLiteral(["T", ["S", "Z"]], ["I"]), "SIZT", False),
-    (BeforeLiteral(["T"], ["I", ["S", "Z"]]), "TSI", True),
-    (BeforeLiteral(["T"], ["I", ["S", "Z"]]), "TSZI", True),
-    (BeforeLiteral(["T"], ["I", ["S", "Z"]]), "TSIZ", True),
-    (BeforeLiteral(["T"], ["I", ["S", "Z"]]), "STZI", True),
-    (BeforeLiteral(["T"], ["I", ["S", "Z"]]), "SZIT", False),
-    (BeforeLiteral(["T"], ["I", ["S", "Z"]]), "SITZ", False),
-    (BeforeLiteral(["T"], ["I", ["S", "Z"]]), "SZTI", False),
-    (BeforeLiteral(["T", ["L", "J"]], ["I", ["S", "Z"]]), "TLJISZ", True),
-    (BeforeLiteral(["T", ["L", "J"]], ["I", ["S", "Z"]]), "TLIS", True),
-    (BeforeLiteral(["T", ["L", "J"]], ["I", ["S", "Z"]]), "LITS", False),
-    (BeforeLiteral(["T", ["L", "J"]], ["I", ["S", "Z"]]), "JITS", False),
-    (BeforeLiteral(["T", ["L", "J"]], ["I", ["S", "Z"]]), "TLSJIZ", True),
-    (BeforeLiteral(["T", ["L", "J"]], ["I", ["S", "Z"]]), "TJZILS", True),
-    (BeforeLiteral(["I", "I"], ["T"]), "IIT", True),
-    (BeforeLiteral(["I", "I"], ["T"]), "II", True),
-    (BeforeLiteral(["I", "I"], ["T"]), "IITI", True),
-    (BeforeLiteral(["I", "I"], ["T"]), "ITII", False),
-    (BeforeLiteral(["I", "I"], ["T"]), "ILIT", True),
-    (BeforeLiteral(["I", "I"], ["T"]), "ITI", False),
-    (BeforeLiteral(["T"], ["I", ["I", "S"]]), "TII", True),
-    (BeforeLiteral(["T"], ["I", ["I", "S"]]), "TIS", True),
-    (BeforeLiteral(["T"], ["I", ["I", "S"]]), "TIZ", True),
-    (BeforeLiteral(["T"], ["I", ["I", "S"]]), "IT", False),
-  ],
-)
-def test_evaluate_before(node: BeforeLiteral, queue: str, expected: bool):
-  assert evaluate_before(node, queue) == expected
 
 
 @pytest.mark.parametrize(
@@ -106,6 +62,57 @@ def test_evaluate_before(node: BeforeLiteral, queue: str, expected: bool):
     ("T!=1", "ITTI", True),
     ("T!=1", "TTTT", True),
     ("T!=1", "IIIT", False),
+    ("T[LJ]=1", "TLJ", True),
+    ("T[LJ]=1", "JTI", True),
+    ("T[LJ]=1", "TLI", True),
+    ("T[LJ]=1", "ITS", False),
+    ("*=1", "TILJSZO", True),
+    ("*=1", "TILJJSZO", False),
+    ("*=1", "TILJZO", False),
+    ("*>=1", "TILJJSZO", True),
+    ("[*]=2", "TT", True),
+    ("[*]=2", "II", True),
+    ("[*]=2", "SS", True),
+    ("[*]=2", "LL", True),
+    ("[*]=2", "OO", True),
+    ("[*]=2", "TILJS", False),
+    ("[*]=2", "LJSZO", False),
+    # before modifier
+    ("T<I", "TI", True),
+    ("T<I", "IT", False),
+    ("I<T", "TI", False),
+    ("I<T", "IT", True),
+    ("T<I", "II", False),
+    ("I<T", "II", True),
+    ("T[SZ]<I", "TSI", True),
+    ("T[SZ]<I", "TSZI", True),
+    ("T[SZ]<I", "TSIZ", True),
+    ("T[SZ]<I", "TISZ", False),
+    ("T[SZ]<I", "SZIT", False),
+    ("T[SZ]<I", "SIZT", False),
+    ("T<I[SZ]", "TSI", True),
+    ("T<I[SZ]", "TSZI", True),
+    ("T<I[SZ]", "TSIZ", True),
+    ("T<I[SZ]", "STZI", True),
+    ("T<I[SZ]", "SZIT", False),
+    ("T<I[SZ]", "SITZ", False),
+    ("T<I[SZ]", "SZTI", False),
+    ("T[LJ]<I[SZ]", "TLJISZ", True),
+    ("T[LJ]<I[SZ]", "TLIS", True),
+    ("T[LJ]<I[SZ]", "LITS", False),
+    ("T[LJ]<I[SZ]", "JITS", False),
+    ("T[LJ]<I[SZ]", "TLSJIZ", True),
+    ("T[LJ]<I[SZ]", "TJZILS", True),
+    ("II<T", "IIT", True),
+    ("II<T", "II", True),
+    ("II<T", "IITI", True),
+    ("II<T", "ITII", False),
+    ("II<T", "ILIT", True),
+    ("II<T", "ITI", False),
+    ("T<I[IS]", "TII", True),
+    ("T<I[IS]", "TIS", True),
+    ("T<I[IS]", "TIZ", True),
+    ("T<I[IS]", "IT", False),
     # test range modifier
     ("4:(T=1)", "TIII", True),
     ("4:(T=1)", "IIIIT", False),  # T is at index 4 (outside range 0-4)

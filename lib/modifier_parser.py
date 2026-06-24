@@ -401,23 +401,3 @@ def evaluate_ast(node, queue: str) -> bool:
     return evaluate_ast(node.right, queue)
 
   raise ValueError(f"Unknown AST node type or operation: {type(node)}")
-
-
-if __name__ == "__main__":
-  parser = Parser()
-
-  print(parser.parse("LLJ < SI", tokenize))
-  print(parser.parse("[*I]=2", tokenize))
-  print(parser.parse("[TLJ]IO=1||[TI][LJ]O=1", tokenize))
-  print(parser.parse("3-5:I<J && 4:T=1 && !/^T/ && [TLJ]IO=1 || [TI][LJ]O=1", tokenize))
-
-  print(evaluate_ast(parser.parse("I<J"), "IJ"))
-  print(evaluate_ast(parser.parse("I<J"), "JI"))
-  print(evaluate_ast(parser.parse("II<J"), "IJI"))
-  print(evaluate_ast(parser.parse("II<J"), "IIJ"))
-  print(evaluate_ast(parser.parse("II<[LJ]"), "IIJ"))
-  print(evaluate_ast(parser.parse("II<[LJ]"), "IIL"))
-  print(evaluate_ast(parser.parse("[TI]<[LJ]"), "TILJ"))
-  print(evaluate_ast(parser.parse("[TI]<[LJ]"), "JTLI"))
-  print(evaluate_ast(parser.parse("[TI]<[LJ]"), "LJTI"))
-  print(evaluate_ast(parser.parse("[TI]<[LJ]"), "LIJT"))
