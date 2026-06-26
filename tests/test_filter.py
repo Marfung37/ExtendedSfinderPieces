@@ -1,6 +1,6 @@
 import pytest
-from lib.parser import Parser, FilterBlock
-from lib.evaluate_filter import evaluate_filter
+from sfinder_pieces.parser import Parser, FilterBlock
+from sfinder_pieces.evaluate_filter import evaluate_filter
 from typing import cast
 
 parser = Parser()

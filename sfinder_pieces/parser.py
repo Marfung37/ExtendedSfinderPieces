@@ -7,9 +7,10 @@ from typing import Final
 CONTEXT_SPEC = [("LBRACE", r"\{"), ("RBRACE", r"\}")]
 
 GEN_SPEC = [
-  ("GEN_PIECES", r"\*|\[\^?(?:[TILJSZO]|\[\^?[TILJSZO]\])\]"),
+  ("GEN_PIECES", r"\*|\[\^?(?:[TILJSZO]|\[\^?[TILJSZO]+\])+\]"),
   ("PERMUTATE", r"!|p\d+"),
   ("WS", r"\s+"),  # Skip whitespace
+  ("MISMATCH", r"."),  # catch any invalid characters
 ]
 
 FILTER_SPEC = [
@@ -24,13 +25,14 @@ FILTER_SPEC = [
   ("LPAREN", r"\("),
   ("RPAREN", r"\)"),
   ("WS", r"\s+"),  # Skip whitespace
+  ("MISMATCH", r"."),  # catch any invalid characters
 ]
 GEN_REGEX = re.compile("|".join(f"(?P<{name}>{pattern})" for name, pattern in GEN_SPEC))
 FILTER_REGEX = re.compile(
   "|".join(f"(?P<{name}>{pattern})" for name, pattern in FILTER_SPEC)
 )
 # separate the different contexts for the tokens
-CONTEXT_SPLIT_REGEX = re.compile(r"(\{.+\})|([^{}]+)")
+CONTEXT_SPLIT_REGEX = re.compile(r"(\{.+?\})|([^{}]+)|(.)")
 
 
 class Token:
@@ -46,7 +48,7 @@ def tokenize(text: str) -> list[Token]:
   tokens = []
 
   for match in CONTEXT_SPLIT_REGEX.finditer(text):
-    filter_block, gen_block = match.groups()
+    filter_block, gen_block, invalid_char = match.groups()
 
     if gen_block:
       for m in GEN_REGEX.finditer(gen_block):
@@ -54,6 +56,8 @@ def tokenize(text: str) -> list[Token]:
         value = m.group()
         if kind == "WS":
           continue  # skip whitespace
+        if kind == "MISMATCH":
+          raise ValueError(f"Unexpected character '{value}' at position {m.start()}")
         tokens.append(Token(kind, value))
     elif filter_block:
       inside_filter = filter_block[1:-1]  # strip the {}
@@ -65,8 +69,13 @@ def tokenize(text: str) -> list[Token]:
           continue  # skip whitespace
         if kind == "REGEX":
           value = value[1:-1]  # strip forward slashes
+        if kind == "MISMATCH":
+          raise ValueError(f"Unexpected character '{value}' at position {m.start()}")
         tokens.append(Token(kind, value))
       tokens.append(Token("RBRACE", "}"))
+    elif invalid_char:
+      # only possible invalid characters are { or }
+      raise ValueError(f"Found '{invalid_char}' without its counterpart")
 
   if len(tokens) == 0:
     raise ValueError(f"Expression {text} could not be tokenized")
@@ -92,7 +101,7 @@ class GeneratorLiteral(AST):
     self.permutate = permutate
 
   def __repr__(self):
-    return f"Generator([{self.pool}]p{self.permutate})"
+    return f"Generator({self.pool}p{self.permutate})"
 
 
 class BinaryOp(AST):
@@ -156,6 +165,7 @@ class RegexLiteral(AST):
 
 # expression to get individual piece or sets of pieces
 PIECES_REGEX = r"[TILJSZO*]|\[[TILJSZO*]+\]"
+GENERATOR_REGEX = r"[TILJSZO]|\[\^?[TILJSZO]+\]"
 
 TETRIS_PIECES: Final[set[str]] = set("TILJSZO")
 TETRIS_ORDERED_PIECES: Final[list[str | list[str]]] = list("TILJSZO")
@@ -193,7 +203,7 @@ class Parser:
       # strip the leading ^
       raw_pieces = raw_pieces[1:]
 
-    sub_patterns = re.findall(PIECES_REGEX, raw_pieces)
+    sub_patterns = re.findall(GENERATOR_REGEX, raw_pieces)
 
     pool = []
     base_pieces: list[str] = []
@@ -211,9 +221,9 @@ class Parser:
         base_pieces.append(item)
     if outer_complement:
       base_pieces = list(TETRIS_PIECES - set(base_pieces))
-      base_pieces.sort(key=tetris_order_key)
 
-    pool.extend(base_pieces)
+    base_pieces.sort(key=tetris_order_key)
+    pool = base_pieces + pool
 
     return pool
 
@@ -228,7 +238,7 @@ class Parser:
       # expand wildcard
       if item == "*":
         if duplicates:
-          parsed_pieces.extend("TILJSZO")
+          parsed_pieces.extend(TETRIS_ORDERED_PIECES)
         else:
           base_pieces |= TETRIS_PIECES
       elif item.startswith("["):
@@ -289,6 +299,13 @@ class Parser:
         else:
           # strip the starting p letter for value
           permutate = int(permutate_expr.value[1:])
+          if permutate == 0:
+            raise ValueError(f"Permutate cannot be 0 in {pool_expr.value}p0")
+      if permutate > len(pool):
+        # permutate given larger than the pool
+        raise ValueError(
+          f"Given permutate {permutate} larger than the pool {pool_expr.value} -> {pool}"
+        )
       return GeneratorLiteral(pool, permutate)
     else:
       raise ValueError(
