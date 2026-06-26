@@ -1,18 +1,18 @@
 import re
 from collections.abc import Callable
-import operator
 from .utils import tetris_order_key
+from typing import Final
 
-OPERATORS = {
-  "=": operator.eq,
-  "!=": operator.ne,
-  "<": operator.lt,
-  ">": operator.gt,
-  "<=": operator.le,
-  ">=": operator.ge,
-}
+# constant to just list tokens used for contexts, unused constant
+CONTEXT_SPEC = [("LBRACE", r"\{"), ("RBRACE", r"\}")]
 
-TOKEN_SPEC = [
+GEN_SPEC = [
+  ("GEN_PIECES", r"\*|\[\^?(?:[TILJSZO]|\[\^?[TILJSZO]\])\]"),
+  ("PERMUTATE", r"!|p\d+"),
+  ("WS", r"\s+"),  # Skip whitespace
+]
+
+FILTER_SPEC = [
   ("RANGE_OP", r"\d+(?:-\d+)?:"),
   ("PIECES", r"(?:[TILJSZO*]|\[[TILJSZO*]+\])+"),
   ("COMP_OP", r"=|<=|>=|!=|=|<|>"),
@@ -25,11 +25,12 @@ TOKEN_SPEC = [
   ("RPAREN", r"\)"),
   ("WS", r"\s+"),  # Skip whitespace
 ]
-MASTER_REGEX = "|".join(f"(?P<{name}>{pattern})" for name, pattern in TOKEN_SPEC)
-token_re = re.compile(MASTER_REGEX)
-
-# expression to get individual piece or sets of pieces
-PIECES_REGEX = r"[TILJSZO*]|\[[TILJSZO*]+\]"
+GEN_REGEX = re.compile("|".join(f"(?P<{name}>{pattern})" for name, pattern in GEN_SPEC))
+FILTER_REGEX = re.compile(
+  "|".join(f"(?P<{name}>{pattern})" for name, pattern in FILTER_SPEC)
+)
+# separate the different contexts for the tokens
+CONTEXT_SPLIT_REGEX = re.compile(r"(\{.+\})|([^{}]+)")
 
 
 class Token:
@@ -41,8 +42,57 @@ class Token:
     return f"({self.kind}, '{self.value}')"
 
 
+def tokenize(text: str) -> list[Token]:
+  tokens = []
+
+  for match in CONTEXT_SPLIT_REGEX.finditer(text):
+    filter_block, gen_block = match.groups()
+
+    if gen_block:
+      for m in GEN_REGEX.finditer(gen_block):
+        kind = m.lastgroup
+        value = m.group()
+        if kind == "WS":
+          continue  # skip whitespace
+        tokens.append(Token(kind, value))
+    elif filter_block:
+      inside_filter = filter_block[1:-1]  # strip the {}
+      tokens.append(Token("LBRACE", "{"))
+      for m in FILTER_REGEX.finditer(inside_filter):
+        kind = m.lastgroup
+        value = m.group()
+        if kind == "WS":
+          continue  # skip whitespace
+        if kind == "REGEX":
+          value = value[1:-1]  # strip forward slashes
+        tokens.append(Token(kind, value))
+      tokens.append(Token("RBRACE", "}"))
+
+  if len(tokens) == 0:
+    raise ValueError(f"Expression {text} could not be tokenized")
+
+  return tokens
+
+
 class AST:
   pass
+
+
+class FilterBlock(AST):
+  def __init__(self, expr: AST):
+    self.expr = expr
+
+  def __repr__(self):
+    return f"Filter({self.expr})"
+
+
+class GeneratorLiteral(AST):
+  def __init__(self, pool: list[str | list[str]], permutate: int):
+    self.pool = pool
+    self.permutate = permutate
+
+  def __repr__(self):
+    return f"Generator([{self.pool}]p{self.permutate})"
 
 
 class BinaryOp(AST):
@@ -104,26 +154,16 @@ class RegexLiteral(AST):
     return f"Regex(`{self.value}`)"
 
 
-def tokenize(text):
-  tokens = []
-  for match in token_re.finditer(text):
-    kind = match.lastgroup
-    value = match.group()
-    if kind == "WS":
-      continue  # skip whitespace
-    if kind == "REGEX":
-      value = value[1:-1]  # strip forward slashes
-    tokens.append(Token(kind, value))
+# expression to get individual piece or sets of pieces
+PIECES_REGEX = r"[TILJSZO*]|\[[TILJSZO*]+\]"
 
-  if len(tokens) == 0:
-    raise ValueError(f"Expression {text} could not be tokenized")
-
-  return tokens
+TETRIS_PIECES: Final[set[str]] = set("TILJSZO")
+TETRIS_ORDERED_PIECES: Final[list[str | list[str]]] = list("TILJSZO")
 
 
 class Parser:
   """
-  Recursive Descent Parser with precedence OR, AND, NOT, ATOMIC
+  Recursive Descent Parser with precedence OR, AND, NOT, ATOMIC for Filter and Basic Parsing for Generator
   """
 
   def __init__(self, lexer: Callable[[str], list[Token]] = tokenize):
@@ -141,7 +181,43 @@ class Parser:
     self._pos += 1
     return token
 
-  def _parse_pieces(
+  def _generator_parse_pool(self, pool_expr: str) -> list[str | list[str]]:
+    pool: list[str | list[str]]
+    if pool_expr == "*":
+      return TETRIS_ORDERED_PIECES
+
+    # must have []
+    raw_pieces = pool_expr[1:-1]
+    outer_complement = raw_pieces.startswith("^")
+    if outer_complement:
+      # strip the leading ^
+      raw_pieces = raw_pieces[1:]
+
+    sub_patterns = re.findall(PIECES_REGEX, raw_pieces)
+
+    pool = []
+    base_pieces: list[str] = []
+    for item in sub_patterns:
+      if item.startswith("["):
+        # strip the []
+        item = item[1:-1]
+        if item.startswith("^"):
+          unique_pieces = TETRIS_PIECES - set(item[1:])
+        else:
+          unique_pieces = set(item)
+
+        pool.append(sorted(unique_pieces, key=tetris_order_key))
+      else:
+        base_pieces.append(item)
+    if outer_complement:
+      base_pieces = list(TETRIS_PIECES - set(base_pieces))
+      base_pieces.sort(key=tetris_order_key)
+
+    pool.extend(base_pieces)
+
+    return pool
+
+  def _filter_parse_pieces(
     self, raw_pieces: str, duplicates: bool = False
   ) -> list[str | list[str]]:
     sub_patterns = re.findall(PIECES_REGEX, raw_pieces)
@@ -154,13 +230,14 @@ class Parser:
         if duplicates:
           parsed_pieces.extend("TILJSZO")
         else:
-          base_pieces |= set("TILJSZO")
+          base_pieces |= TETRIS_PIECES
       elif item.startswith("["):
-        inner_raw_pieces = item.strip("[]")
+        # strip the []
+        inner_raw_pieces = item[1:-1]
         # get all pieces within []
         pieces_set = set(inner_raw_pieces)
         if "*" in pieces_set:
-          parsed_pieces.append(list("TILJSZO"))
+          parsed_pieces.append(TETRIS_ORDERED_PIECES)
         else:
           parsed_pieces.append(sorted(list(pieces_set), key=tetris_order_key))
       else:
@@ -173,15 +250,53 @@ class Parser:
 
     return parsed_pieces
 
-  def parse(self, expr: str, lexer: Callable[[str], list[Token]] | None = None) -> AST:
+  def parse(
+    self, expr: str, lexer: Callable[[str], list[Token]] | None = None
+  ) -> list[AST]:
     if lexer is None:
       lexer = self._lexer
     self._tokens = lexer(expr)
     self._pos = 0
-    return self._parse_tokens()
 
-  def _parse_tokens(self) -> AST:
-    return self._parse_or()
+    result = []
+    while self._pos < len(self._tokens):
+      if self._peek().kind == "LBRACE":
+        self._consume("LBRACE")
+        result.append(self._parse_filter())
+        self._consume("RBRACE")
+      else:
+        result.append(self._parse_generator())
+
+    return result
+
+  def _parse_generator(self) -> GeneratorLiteral:
+    if self._peek().kind == "GEN_PIECES":
+      pool_expr = self._consume("GEN_PIECES")
+      if pool_expr.value is None:
+        raise ValueError("No expression given for a GEN_PIECES token")
+
+      pool = self._generator_parse_pool(pool_expr.value)
+
+      # check the PERMUTATE token that can be after, otherwise is 1
+      permutate = 1
+      if self._peek().kind == "PERMUTATE":
+        permutate_expr = self._consume("PERMUTATE")
+        if permutate_expr.value is None:
+          raise ValueError("No expression given for a PERMUTATE token")
+
+        if permutate_expr.value == "!":
+          permutate = len(pool)
+        else:
+          # strip the starting p letter for value
+          permutate = int(permutate_expr.value[1:])
+      return GeneratorLiteral(pool, permutate)
+    else:
+      raise ValueError(
+        f"Expected GEN_PIECES token for generator but got {self._peek().kind} instead"
+      )
+
+  def _parse_filter(self) -> FilterBlock:
+    return FilterBlock(self._parse_or())
 
   def _parse_or(self) -> AST:
     left = self._parse_and()
@@ -230,7 +345,7 @@ class Parser:
     # if parentheses
     if token.kind == "LPAREN":
       self._consume("LPAREN")
-      expr = self._parse_tokens()
+      expr = self._parse_or()
       self._consume("RPAREN")
       return expr
 
@@ -257,147 +372,23 @@ class Parser:
         after_pieces = self._consume("PIECES")
         if after_pieces.value is None:
           raise ValueError(
-            "No pieces expression found for PIECES token after noticing before modifier"
+            "No pieces expression found for PIECES token after noticing before filter"
           )
         return BeforeLiteral(
-          self._parse_pieces(pieces.value, True),
-          self._parse_pieces(after_pieces.value, True),
+          self._filter_parse_pieces(pieces.value, True),
+          self._filter_parse_pieces(after_pieces.value, True),
         )
       elif next_token.kind == "NUMBER":
         count = self._consume("NUMBER")
         if count.value is None:
           raise ValueError(
-            "No number found for NUMBER token after noticing count modifier"
+            "No number found for NUMBER token after noticing count filter"
           )
         return CountLiteral(
-          self._parse_pieces(pieces.value), op.value, int(count.value)
+          self._filter_parse_pieces(pieces.value), op.value, int(count.value)
         )
       else:
         raise ValueError(f"Unexpected token after PIECES COMP_OP: {token}")
 
     else:
       raise ValueError(f"Unexpected token: {token}")
-
-
-def get_char_indices(queue_string: str) -> dict[str, list[int]]:
-  """
-  Builds a map of character positions.
-  e.g., "ISIJ" -> {'I': [0, 2], 'S': [1], 'J': [3]}
-  """
-  positions = {}
-  for index, char in enumerate(queue_string):
-    positions.setdefault(char, []).append(index)
-  return positions
-
-
-def evaluate_before(node: BeforeLiteral, queue: str) -> bool:
-  # get index of each piece
-  pos_map = get_char_indices(queue)
-
-  for before_idx, before_item in enumerate(node.before_pieces):
-    for after_idx, after_item in enumerate(node.after_pieces):
-      # normalize as 'T' is same as ['T']
-      before_piece = before_item if isinstance(before_item, list) else [before_item]
-      after_piece = after_item if isinstance(after_item, list) else [after_item]
-
-      # is any of before fully satisfied?
-      outer_flag = False
-      for b_piece in before_piece:
-        # is any of the after fully satisfied by this before piece?
-        inner_flag = False
-
-        # determine which instance of this piece is this
-        # if second I in the before_pieces then look at second I in queue
-        b_instance_idx = node.before_pieces[:before_idx].count(b_piece)
-
-        for a_piece in after_piece:
-          a_instance_idx = node.after_pieces[:after_idx].count(a_piece)
-
-          b_indices = pos_map.get(b_piece, [])
-          a_indices = pos_map.get(a_piece, [])
-
-          # there's no instance of this after piece
-          # automatically satisfies I < J if there's no J
-          if len(a_indices) <= a_instance_idx:
-            inner_flag = True
-            break
-          # there's no instance of this before piece
-          # automatically false I < J if there's no I yet there is a J
-          elif len(b_indices) <= b_instance_idx:
-            continue
-          # both pieces are here so check order
-          elif b_indices[b_instance_idx] < a_indices[a_instance_idx]:
-            inner_flag = True
-            break
-
-        # short circuit as found a before piece that is before one of the after pieces
-        if inner_flag:
-          outer_flag = True
-          break
-
-      # short circuit if this before piece is not able to be satisfied
-      if not outer_flag:
-        return False
-  return True
-
-
-# --- AST Evaluator ---
-# This function will traverse the AST and execute the boolean logic.
-def evaluate_ast(node, queue: str) -> bool:
-  ###
-  # Atomic
-  ###
-
-  if isinstance(node, RegexLiteral):
-    try:
-      # Compile the regex and check for a match
-      pattern = re.compile(node.value)
-      return pattern.search(queue) is not None
-    except re.error as e:
-      raise ValueError(f"Invalid regex: '{node.value}' - {e}")
-
-  elif isinstance(node, CountLiteral):
-    comp_op = OPERATORS[node.op]
-    for target in node.pieces:
-      if isinstance(target, list):
-        # set of pieces: [LJ]=1 means that # of L = 1 OR # of J = 1
-        result = any(comp_op(queue.count(piece), node.count) for piece in target)
-      else:
-        # single piece
-        result = comp_op(queue.count(target), node.count)
-
-      # this piece part is not satisfied so short circuit as false
-      if not result:
-        return False
-    return True
-
-  elif isinstance(node, BeforeLiteral):
-    return evaluate_before(node, queue)
-
-  ###
-  # Operators
-  ###
-
-  # restrict range of queue to apply expr
-  elif isinstance(node, RangeLookup):
-    return evaluate_ast(node.expr, queue[node.start : node.end])
-
-  elif isinstance(node, UnaryOp):
-    if node.op == "NOT":
-      return not evaluate_ast(node.expr, queue)
-
-  elif isinstance(node, BinaryOp):
-    # Evaluate left side first
-    left_val = evaluate_ast(node.left, queue)
-
-    # short circuit if possible
-    if node.op == "AND" and not left_val:
-      return False
-
-    elif node.op == "OR" and left_val:
-      return True
-
-    # evaluate and return right side otherwise
-    return evaluate_ast(node.right, queue)
-
-  raise ValueError(f"Unknown AST node type or operation: {type(node)}")
