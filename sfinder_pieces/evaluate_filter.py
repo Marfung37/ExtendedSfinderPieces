@@ -85,60 +85,62 @@ def evaluate_before(node: BeforeLiteral, queue: str) -> bool:
 # --- Filter Evaluator ---
 # This function will traverse the Filter and execute the boolean logic.
 def evaluate_filter(node: AST, queue: str) -> bool:
-  ###
-  # Atomic
-  ###
+  match node:
+    ###
+    # Atomic
+    ###
+    case RegexLiteral(value=value):
+      try:
+        # Compile the regex and check for a match
+        pattern = re.compile(value)
+        return pattern.search(queue) is not None
+      except re.error as e:
+        raise ValueError(f"Invalid regex: '{value}' - {e}")
 
-  if isinstance(node, RegexLiteral):
-    try:
-      # Compile the regex and check for a match
-      pattern = re.compile(node.value)
-      return pattern.search(queue) is not None
-    except re.error as e:
-      raise ValueError(f"Invalid regex: '{node.value}' - {e}")
+    case CountLiteral(pieces=pieces, op=op, count=count):
+      comp_op = OPERATORS[op]
+      for target in pieces:
+        if isinstance(target, list):
+          # set of pieces: [LJ]=1 means that # of L = 1 OR # of J = 1
+          result = any(comp_op(queue.count(piece), count) for piece in target)
+        else:
+          # single piece
+          result = comp_op(queue.count(target), count)
 
-  elif isinstance(node, CountLiteral):
-    comp_op = OPERATORS[node.op]
-    for target in node.pieces:
-      if isinstance(target, list):
-        # set of pieces: [LJ]=1 means that # of L = 1 OR # of J = 1
-        result = any(comp_op(queue.count(piece), node.count) for piece in target)
-      else:
-        # single piece
-        result = comp_op(queue.count(target), node.count)
-
-      # this piece part is not satisfied so short circuit as false
-      if not result:
-        return False
-    return True
-
-  elif isinstance(node, BeforeLiteral):
-    return evaluate_before(node, queue)
-
-  ###
-  # Operators
-  ###
-
-  # restrict range of queue to apply expr
-  elif isinstance(node, RangeLookup):
-    return evaluate_filter(node.expr, queue[node.start : node.end])
-
-  elif isinstance(node, UnaryOp):
-    if node.op == "NOT":
-      return not evaluate_filter(node.expr, queue)
-
-  elif isinstance(node, BinaryOp):
-    # Evaluate left side first
-    left_val = evaluate_filter(node.left, queue)
-
-    # short circuit if possible
-    if node.op == "AND" and not left_val:
-      return False
-
-    elif node.op == "OR" and left_val:
+        # this piece part is not satisfied so short circuit as false
+        if not result:
+          return False
       return True
 
-    # evaluate and return right side otherwise
-    return evaluate_filter(node.right, queue)
+    case BeforeLiteral():
+      return evaluate_before(node, queue)
 
-  raise ValueError(f"Unknown AST node type or operation: {type(node)}")
+    ###
+    # Operators
+    ###
+
+    # restrict range of queue to apply expr
+    case RangeLookup(start=start, end=end, expr=expr):
+      return evaluate_filter(expr, queue[start:end])
+
+    case UnaryOp(expr=expr):
+      # only NOT is a UnaryOp
+      return not evaluate_filter(expr, queue)
+
+    case BinaryOp(left=left, op=op, right=right):
+      # Evaluate left side first
+      left_val = evaluate_filter(left, queue)
+
+      # short circuit if possible
+      if op == "AND" and not left_val:
+        return False
+
+      elif op == "OR" and left_val:
+        return True
+
+      # evaluate and return right side otherwise
+      return evaluate_filter(right, queue)
+
+    case _:
+      # error case
+      raise ValueError(f"Unknown AST node type or operation: {type(node)}")

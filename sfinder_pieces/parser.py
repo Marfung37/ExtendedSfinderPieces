@@ -96,7 +96,7 @@ class FilterBlock(AST):
 
 
 class GeneratorLiteral(AST):
-  def __init__(self, pool: list[str | list[str]], permutate: int):
+  def __init__(self, pool: list[str], permutate: int):
     self.pool = pool
     self.permutate = permutate
 
@@ -168,7 +168,7 @@ PIECES_REGEX = r"[TILJSZO*]|\[[TILJSZO*]+\]"
 GENERATOR_REGEX = r"[TILJSZO]|\[\^?[TILJSZO]+\]"
 
 TETRIS_PIECES: Final[set[str]] = set("TILJSZO")
-TETRIS_ORDERED_PIECES: Final[list[str | list[str]]] = list("TILJSZO")
+TETRIS_ORDERED_PIECES: Final[list[str]] = list("TILJSZO")
 
 
 class Parser:
@@ -191,8 +191,8 @@ class Parser:
     self._pos += 1
     return token
 
-  def _generator_parse_pool(self, pool_expr: str) -> list[str | list[str]]:
-    pool: list[str | list[str]]
+  def _generator_parse_pool(self, pool_expr: str) -> list[str]:
+    pool: list[str]
     if pool_expr == "*":
       return TETRIS_ORDERED_PIECES
 
@@ -216,14 +216,15 @@ class Parser:
         else:
           unique_pieces = set(item)
 
-        pool.append(sorted(unique_pieces, key=tetris_order_key))
+        pool.append("".join(sorted(unique_pieces, key=tetris_order_key)))
       else:
         base_pieces.append(item)
     if outer_complement:
       base_pieces = list(TETRIS_PIECES - set(base_pieces))
 
     base_pieces.sort(key=tetris_order_key)
-    pool = base_pieces + pool
+    if len(base_pieces) > 0:
+      pool = base_pieces + pool
 
     return pool
 
@@ -262,7 +263,7 @@ class Parser:
 
   def parse(
     self, expr: str, lexer: Callable[[str], list[Token]] | None = None
-  ) -> list[AST]:
+  ) -> list[GeneratorLiteral | FilterBlock]:
     if lexer is None:
       lexer = self._lexer
     self._tokens = lexer(expr)
