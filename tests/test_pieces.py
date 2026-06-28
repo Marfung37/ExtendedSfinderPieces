@@ -1,7 +1,25 @@
 import pytest
 from sfinder_pieces.parser import Parser
 from sfinder_pieces.sfinder_pieces import sfinder_pieces, sfinder_pieces_random_choice
-from math import comb, perm
+from math import comb, perm, ceil
+import random
+import sys
+
+
+# helpful function to give seed of random if test fails
+@pytest.fixture(autouse=True)
+def automatically_seed_random():
+  # Generate a random seed for this run
+  seed = random.randint(0, sys.maxsize)
+  random.seed(seed)
+
+  # This yields control to the test function
+  yield
+
+  # If you run pytest with `-s`, this will always print.
+  # Otherwise, pytest will only show this stdout if the test FAILS.
+  print(f"\n--- RANDOM SEED USED FOR THIS RUN: {seed} ---")
+
 
 parser = Parser()
 
@@ -59,3 +77,70 @@ parser = Parser()
 )
 def test_evaluate_sfinder_pieces(expression, expected_length):
   assert len(tuple(sfinder_pieces(expression))) == expected_length
+
+
+SAMPLE_RATIO = 1 / 10
+
+
+@pytest.mark.parametrize(
+  "expression",
+  [
+    # check if same as generator directly
+    ("T"),
+    ("I"),
+    ("L"),
+    ("J"),
+    ("S"),
+    ("Z"),
+    ("O"),
+    ("*"),
+    ("[TS]"),
+    ("[LSO]"),
+    ("[TT]"),
+    ("[TTI]"),
+    ("[TS]!"),
+    ("[LSO]!"),
+    ("[LSO]p2"),
+    ("*p2"),
+    ("*p7"),
+    ("[[TS]]"),
+    ("[I[TS]]"),
+    ("[T[TS]]"),
+    ("[T[TS]]p2"),
+    # multiple generator expressions
+    ("**"),
+    ("*p7*p3"),
+    ("*,*"),
+    ("*p7,*p3"),
+    ("[TL]![LJ]!"),
+    ("[TL[SZ]]![LJ[SZ]]!"),
+    # filter expressions
+    ("*p4{T=1}"),
+    ("*,*p4{T=1}"),
+    ("**p4{T=1}"),
+    ("[IL]!{T=1}"),
+    ("[TIL]!{1-3:T=1}"),  # T not first
+    ("[TIL]!{/^T/}"),  # T first
+    ("[ILLS]!{LL<I}"),
+    ("[TISZ]!{T[SZ]<I}"),
+    ("*p2*p2{[*]=2}"),
+    ("*p4{T<I[SZ]}"),
+    ("*p4{T[LJ]<I[SZ]}"),
+    # some expressions from database
+    ("*p7{!(IO<LJ||/[TO]$/||/T[LJ]$/)}"),
+    ("[LSZO]!{L<Z||LZ<S},[TIJ]!,*p3{!I[LJ][ZO]=1||(IJZ=1&&/^J/)}"),
+    ("[SZ]!,*p4{JSZO=1&&(/^SJ/||/^J.?S/||/^.JS/)}"),
+    ("[LJSZ]!{2:LZ=1||3:LSZ=1||L<Z},[TIO]!,[^TIO]!{L<Z&&LZ<J}"),
+  ],
+)
+def test_evaluate_random_sfinder_pieces(expression):
+  all_queues = set(sfinder_pieces(expression))
+
+  if len(all_queues) == 0:
+    assert sfinder_pieces_random_choice(expression) is None
+    return
+
+  # use a bounded sample size within 5-50
+  samples = min(max(5, ceil(SAMPLE_RATIO * len(all_queues))), 50)
+  for _ in range(samples):
+    assert sfinder_pieces_random_choice(expression) in all_queues

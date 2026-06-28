@@ -75,7 +75,7 @@ def sfinder_pieces(pattern: str) -> Iterator[str]:
   return chain(*running_parts)
 
 
-def sfinder_pieces_random_choice(pattern: str) -> str:
+def sfinder_pieces_random_choice(pattern: str) -> str | None:
   # gets one of the possible queues with uniform randomness
   parsed_pattern = parse_pattern(pattern)
 
@@ -87,6 +87,11 @@ def sfinder_pieces_random_choice(pattern: str) -> str:
     for blocks in appending_parts:
       evaluated_blocks = tuple(evaluate_blocks(blocks))
       weight *= len(evaluated_blocks)
+
+      # no queues to choose from
+      if len(evaluated_blocks) == 0:
+        return None
+
       queue_choice += random.choice(evaluated_blocks)
 
     weights.append(weight)
@@ -95,4 +100,4 @@ def sfinder_pieces_random_choice(pattern: str) -> str:
   return random.choices(choices, weights=weights)[0]
 
 
-print("\n".join(list(sfinder_pieces("*p4{T[LJ]<I[SZ]}"))))
+print(sfinder_pieces_random_choice("T{L=1}"))
