@@ -1,8 +1,14 @@
 from .parser import Parser, GeneratorLiteral, FilterBlock
-from .evaluate_generator import evaluate_generator
+from .evaluate_generator import (
+  evaluate_generator,
+  sampleable_generator,
+  total_queues,
+  random_evaluate_generator,
+)
 from .evaluate_filter import evaluate_filter
 from collections.abc import Iterator
 from itertools import product, chain
+from typing import cast
 import random
 
 
@@ -87,6 +93,14 @@ def random_sfinder_pieces(pattern: str) -> str | None:
     weight = 1
     queue_choice = ""
     for blocks in appending_parts:
+      if len(blocks) == 1:
+        # must be only a GeneratorLiteral and might be able to use faster function
+        block = cast(GeneratorLiteral, blocks[0])
+        if sampleable_generator(block):
+          queue_choice += random_evaluate_generator(block)
+          weight *= total_queues(block)
+          continue
+
       evaluated_blocks = tuple(evaluate_blocks(blocks))
       weight *= len(evaluated_blocks)
 
