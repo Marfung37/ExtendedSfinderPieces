@@ -7,7 +7,7 @@ from typing import Final
 CONTEXT_SPEC = [("LBRACE", r"\{"), ("RBRACE", r"\}")]
 
 GEN_SPEC = [
-  ("GEN_PIECES", r"\*|\[\^?(?:[TILJSZO]|\[\^?[TILJSZO]+\])+\]"),
+  ("GEN_PIECES", r"[TILJSZO*]|\[\^?(?:[TILJSZO]|\[\^?[TILJSZO]+\])+\]"),
   ("PERMUTATE", r"!|p\d+"),
   ("WS", r"\s+"),  # Skip whitespace
   ("MISMATCH", r"."),  # catch any invalid characters
@@ -135,7 +135,7 @@ class RangeLookup(AST):
 
 
 class CountLiteral(AST):
-  def __init__(self, pieces: list[str | list[str]], op: str, count: int):
+  def __init__(self, pieces: list[str], op: str, count: int):
     self.pieces = pieces
     self.op = op
     self.count = count
@@ -145,9 +145,7 @@ class CountLiteral(AST):
 
 
 class BeforeLiteral(AST):
-  def __init__(
-    self, before_pieces: list[str | list[str]], after_pieces: list[str | list[str]]
-  ):
+  def __init__(self, before_pieces: list[str], after_pieces: list[str]):
     self.before_pieces = before_pieces
     self.after_pieces = after_pieces
 
@@ -195,6 +193,9 @@ class Parser:
     pool: list[str]
     if pool_expr == "*":
       return TETRIS_ORDERED_PIECES
+    # singular piece
+    if len(pool_expr) == 1:
+      return [pool_expr]
 
     # must have []
     raw_pieces = pool_expr[1:-1]
@@ -230,7 +231,7 @@ class Parser:
 
   def _filter_parse_pieces(
     self, raw_pieces: str, duplicates: bool = False
-  ) -> list[str | list[str]]:
+  ) -> list[str]:
     sub_patterns = re.findall(PIECES_REGEX, raw_pieces)
 
     base_pieces = set()
@@ -241,23 +242,23 @@ class Parser:
         if duplicates:
           parsed_pieces.extend(TETRIS_ORDERED_PIECES)
         else:
-          base_pieces |= TETRIS_PIECES
+          base_pieces = TETRIS_PIECES
       elif item.startswith("["):
         # strip the []
         inner_raw_pieces = item[1:-1]
         # get all pieces within []
         pieces_set = set(inner_raw_pieces)
         if "*" in pieces_set:
-          parsed_pieces.append(TETRIS_ORDERED_PIECES)
+          parsed_pieces.append("TILJSZO")
         else:
-          parsed_pieces.append(sorted(list(pieces_set), key=tetris_order_key))
+          parsed_pieces.append("".join(sorted(pieces_set, key=tetris_order_key)))
       else:
         if duplicates:
           parsed_pieces.append(item)
         else:
           base_pieces.add(item)
     if not duplicates:
-      parsed_pieces.extend(sorted(list(base_pieces), key=tetris_order_key))
+      parsed_pieces.extend(sorted(base_pieces, key=tetris_order_key))
 
     return parsed_pieces
 
@@ -287,10 +288,8 @@ class Parser:
         raise ValueError("No expression given for a GEN_PIECES token")
 
       pool = self._generator_parse_pool(pool_expr.value)
-
-      # check the PERMUTATE token that can be after, otherwise is 1
       permutate = 1
-      if self._peek().kind == "PERMUTATE":
+      if len(pool) > 1 and self._peek().kind == "PERMUTATE":
         permutate_expr = self._consume("PERMUTATE")
         if permutate_expr.value is None:
           raise ValueError("No expression given for a PERMUTATE token")

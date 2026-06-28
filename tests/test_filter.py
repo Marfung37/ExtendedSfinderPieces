@@ -111,6 +111,6 @@ parser = Parser()
     ("{([LJ]=1&&!LJ=1)||LJ=0}", "IS", True),
   ],
 )
-def test_evaluate_ast(expression, queue_str, expected):
+def test_evaluate_filter(expression, queue_str, expected):
   ast = parser.parse(expression)
   assert evaluate_filter(cast(FilterBlock, ast[0]).expr, queue_str) == expected

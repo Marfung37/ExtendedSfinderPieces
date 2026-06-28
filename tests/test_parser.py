@@ -8,6 +8,8 @@ parser = Parser()
   "expression, expected",
   [
     # generator expressions
+    ("T", "Generator(['T']p1)"),
+    ("L", "Generator(['L']p1)"),
     ("*", "Generator(['T', 'I', 'L', 'J', 'S', 'Z', 'O']p1)"),
     ("[TILJSZO]", "Generator(['T', 'I', 'L', 'J', 'S', 'Z', 'O']p1)"),
     ("[TI]", "Generator(['T', 'I']p1)"),
@@ -49,11 +51,11 @@ parser = Parser()
     ("{1:/^T/}", "Filter(Range(0-1 -> Regex(`^T`)))"),
     (
       "{[LJ]=1&&!LJ=1}",
-      "Filter((Count([['L', 'J']] = 1) AND (NOT Count(['L', 'J'] = 1))))",
+      "Filter((Count(['LJ'] = 1) AND (NOT Count(['L', 'J'] = 1))))",
     ),
     (
       "{([LJ]=1&&!LJ=1)||LJ=0}",
-      "Filter(((Count([['L', 'J']] = 1) AND (NOT Count(['L', 'J'] = 1))) OR Count(['L', 'J'] = 0)))",
+      "Filter(((Count(['LJ'] = 1) AND (NOT Count(['L', 'J'] = 1))) OR Count(['L', 'J'] = 0)))",
     ),
   ],
 )

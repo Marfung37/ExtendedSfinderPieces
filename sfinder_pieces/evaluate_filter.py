@@ -35,12 +35,8 @@ def evaluate_before(node: BeforeLiteral, queue: str) -> bool:
   # get index of each piece
   pos_map = get_char_indices(queue)
 
-  for before_idx, before_item in enumerate(node.before_pieces):
-    for after_idx, after_item in enumerate(node.after_pieces):
-      # normalize as 'T' is same as ['T']
-      before_piece = before_item if isinstance(before_item, list) else [before_item]
-      after_piece = after_item if isinstance(after_item, list) else [after_item]
-
+  for before_idx, before_piece in enumerate(node.before_pieces):
+    for after_idx, after_piece in enumerate(node.after_pieces):
       # is any of before fully satisfied?
       outer_flag = False
       for b_piece in before_piece:
@@ -82,8 +78,6 @@ def evaluate_before(node: BeforeLiteral, queue: str) -> bool:
   return True
 
 
-# --- Filter Evaluator ---
-# This function will traverse the Filter and execute the boolean logic.
 def evaluate_filter(node: AST, queue: str) -> bool:
   match node:
     ###
@@ -100,12 +94,8 @@ def evaluate_filter(node: AST, queue: str) -> bool:
     case CountLiteral(pieces=pieces, op=op, count=count):
       comp_op = OPERATORS[op]
       for target in pieces:
-        if isinstance(target, list):
-          # set of pieces: [LJ]=1 means that # of L = 1 OR # of J = 1
-          result = any(comp_op(queue.count(piece), count) for piece in target)
-        else:
-          # single piece
-          result = comp_op(queue.count(target), count)
+        # set of pieces: [LJ]=1 means that # of L = 1 OR # of J = 1
+        result = any(comp_op(queue.count(piece), count) for piece in target)
 
         # this piece part is not satisfied so short circuit as false
         if not result:
