@@ -1,8 +1,8 @@
 import pytest
-from sfinder_pieces.sfinder_pieces import sfinder_pieces, random_sfinder_pieces
-from math import comb, perm, ceil
 import random
 import sys
+from sfinder_pieces.sfinder_pieces import sfinder_pieces, random_sfinder_pieces
+from math import comb, perm, ceil
 
 
 # helpful function to give seed of random if test fails
