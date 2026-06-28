@@ -1,6 +1,5 @@
 import pytest
-from sfinder_pieces.parser import Parser
-from sfinder_pieces.sfinder_pieces import sfinder_pieces, sfinder_pieces_random_choice
+from sfinder_pieces.sfinder_pieces import sfinder_pieces, random_sfinder_pieces
 from math import comb, perm, ceil
 import random
 import sys
@@ -19,9 +18,6 @@ def automatically_seed_random():
   # If you run pytest with `-s`, this will always print.
   # Otherwise, pytest will only show this stdout if the test FAILS.
   print(f"\n--- RANDOM SEED USED FOR THIS RUN: {seed} ---")
-
-
-parser = Parser()
 
 
 @pytest.mark.parametrize(
@@ -56,6 +52,8 @@ parser = Parser()
     ("*p7,*p3", perm(7) * perm(7, 3)),
     ("[TL]![LJ]!", 4),
     ("[TL[SZ]]![LJ[SZ]]!", perm(3) * 2 * perm(3) * 2),
+    ("T;I", 2),
+    ("[TIL]p2;[SZO]p2", perm(3, 2) + perm(3, 2)),
     # filter expressions
     ("*p4{T=1}", comb(6, 3) * perm(4)),
     ("*,*p4{T=1}", 7 * comb(6, 3) * perm(4)),
@@ -63,6 +61,7 @@ parser = Parser()
     ("[IL]!{T=1}", 0),
     ("[TIL]!{1-3:T=1}", perm(3) - perm(2)),  # T not first
     ("[TIL]!{/^T/}", perm(2)),  # T first
+    ("[TIL]!{1-3:T=1};[TIL]!{/^T/}", perm(3)),
     ("[ILLS]!{LL<I}", 4),
     ("[TISZ]!{T[SZ]<I}", 10),
     ("*p2*p2{[*]=2}", 924),
@@ -114,6 +113,7 @@ SAMPLE_RATIO = 1 / 10
     ("*p7,*p3"),
     ("[TL]![LJ]!"),
     ("[TL[SZ]]![LJ[SZ]]!"),
+    ("T;I"),
     # filter expressions
     ("*p4{T=1}"),
     ("*,*p4{T=1}"),
@@ -121,6 +121,7 @@ SAMPLE_RATIO = 1 / 10
     ("[IL]!{T=1}"),
     ("[TIL]!{1-3:T=1}"),  # T not first
     ("[TIL]!{/^T/}"),  # T first
+    ("[TIL]!{1-3:T=1};[TIL]!{/^T/}"),
     ("[ILLS]!{LL<I}"),
     ("[TISZ]!{T[SZ]<I}"),
     ("*p2*p2{[*]=2}"),
@@ -137,10 +138,10 @@ def test_evaluate_random_sfinder_pieces(expression):
   all_queues = set(sfinder_pieces(expression))
 
   if len(all_queues) == 0:
-    assert sfinder_pieces_random_choice(expression) is None
+    assert random_sfinder_pieces(expression) is None
     return
 
-  # use a bounded sample size within 5-50
-  samples = min(max(5, ceil(SAMPLE_RATIO * len(all_queues))), 50)
+  # use a bounded sample size within min(5, max length of queues)-50
+  samples = min(max(min(5, len(all_queues)), ceil(SAMPLE_RATIO * len(all_queues))), 50)
   for _ in range(samples):
-    assert sfinder_pieces_random_choice(expression) in all_queues
+    assert random_sfinder_pieces(expression) in all_queues

@@ -75,7 +75,7 @@ def sfinder_pieces(pattern: str) -> Iterator[str]:
   return chain(*running_parts)
 
 
-def sfinder_pieces_random_choice(pattern: str) -> str | None:
+def random_sfinder_pieces(pattern: str) -> str | None:
   # gets one of the possible queues with uniform randomness
   parsed_pattern = parse_pattern(pattern)
 
@@ -98,6 +98,3 @@ def sfinder_pieces_random_choice(pattern: str) -> str | None:
     choices.append(queue_choice)
 
   return random.choices(choices, weights=weights)[0]
-
-
-print(sfinder_pieces_random_choice("T{L=1}"))
