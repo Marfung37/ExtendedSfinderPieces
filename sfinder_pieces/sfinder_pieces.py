@@ -95,4 +95,4 @@ def sfinder_pieces_random_choice(pattern: str) -> str:
   return random.choices(choices, weights=weights)[0]
 
 
-print(list(sfinder_pieces("*p4{T=1&&[LJ]=1&&!LJ=1},*p7")))
+print("\n".join(list(sfinder_pieces("*p4{T[LJ]<I[SZ]}"))))

@@ -90,6 +90,7 @@ parser = Parser()
     ("{T<I[IS]}", "TIS", True),
     ("{T<I[IS]}", "TIZ", True),
     ("{T<I[IS]}", "IT", False),
+    ("{T<I[SZ]}", "LZOJ", False),
     # regex modifier, mostly need to just check if can parse regex and evaluate it
     ("{/^T/}", "TIL", True),
     ("{/^T/}", "TSZ", True),

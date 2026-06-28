@@ -48,9 +48,13 @@ parser = Parser()
     ("[ILLS]!{LL<I}", 4),
     ("[TISZ]!{T[SZ]<I}", 10),
     ("*p2*p2{[*]=2}", 924),
+    ("*p4{T<I[SZ]}", 334),
+    ("*p4{T[LJ]<I[SZ]}", 250),
     # some expressions from database
     ("*p7{!(IO<LJ||/[TO]$/||/T[LJ]$/)}", 2720),
     ("[LSZO]!{L<Z||LZ<S},[TIJ]!,*p3{!I[LJ][ZO]=1||(IJZ=1&&/^J/)}", 18048),
+    ("[SZ]!,*p4{JSZO=1&&(/^SJ/||/^J.?S/||/^.JS/)}", 16),
+    ("[LJSZ]!{2:LZ=1||3:LSZ=1||L<Z},[TIO]!,[^TIO]!{L<Z&&LZ<J}", 384),
   ],
 )
 def test_evaluate_sfinder_pieces(expression, expected_length):

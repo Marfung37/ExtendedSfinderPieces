@@ -53,15 +53,15 @@ def evaluate_before(node: BeforeLiteral, queue: str) -> bool:
           b_indices = pos_map.get(b_piece, [])
           a_indices = pos_map.get(a_piece, [])
 
+          # there's no instance of this before piece
+          # automatically false I < J if there is no I
+          if len(b_indices) <= b_instance_idx:
+            continue
           # there's no instance of this after piece
-          # automatically satisfies I < J if there's no J
-          if len(a_indices) <= a_instance_idx:
+          # automatically satisfies I < J if there's no J yet there is an I
+          elif len(a_indices) <= a_instance_idx:
             inner_flag = True
             break
-          # there's no instance of this before piece
-          # automatically false I < J if there's no I yet there is a J
-          elif len(b_indices) <= b_instance_idx:
-            continue
           # both pieces are here so check order
           elif b_indices[b_instance_idx] < a_indices[a_instance_idx]:
             inner_flag = True
