@@ -1,61 +1,222 @@
 # ExtendedSfinderPieces
-Extends the notation for sfinder pieces and output all the queues  
-The queues are sorted with `TILJSZO` ordering
+
+A parser to generate Tetris queues based on
+[sfinder](https://github.com/knewjade/solution-finder) notation for generating queues.
+This project extends on this notation with several features,
+mainly ability to filter the queues.
+
+## Usage
+
+As a CLI utility,
+
+```sh
+python3 pieces.py "[pattern]"
+```
+
+The quotes around the pattern helps prevents the shell from interpreting symbols
+in the `pattern` as shell symbols such as `!`, `&`, `|`, or `^`.
 
 ## Format
-```python3 pieces.py "[pieces...]"```
-Quote the pieces arguments due to cli reading some symbols like `{}`, `*`, `!`, `;`, `&&`, etc. as operators in a command  
 
-## General Pieces Format
-```pieces{modifier}```  
-The modifier applies to the pieces  
-To separate parts to be modify and not, delimitate with commas  
-Parentheses are supported for applying a modifier on pieces already modified  
-Use semicolons to add different extended sfinder pieces into same list  
-Use <> to input a file instead of pieces, which can include comments and extendPieces format
-  
-Ex1: `SZ,Z*p2{modifier}` The modifier will apply to only the Z\*p2  
-Ex2: `(SZ,Z*p2){modifier}` The modifier will apply to SZ,Z*p2  
-Ex3: `pieces1{modifier1};pieces2{modifier2}` Using semicolons  
-Ex4: `T<output/patterns.txt>{modifer1}` Inputting a file as queues
+A pattern (the string to be parsed) is built from two component types:
 
-## Sfinder Pieces
-The `[]` in the sfinder pieces are able to handle duplicate pieces  
-There can be nesting of `[]` to a depth of 1  
+- **generator** - produces queues.  
+Examples:
+  - Tetrominos (`T`, `I`, `L`, ...)
+  - All permutations of the 7 tetrominos (`*p7`)
+- **filter** - applies a constraint to the queue built so far.  
+Examples:
+  - `{L<S}` filters for queues where L appears before S.
 
-Ex1: `[SSZ]!` any permutation of the pieces SSZ  
-Ex2: `[TI[LJ][SZ]]!` any permutation of TILS, TIJS, TILZ, or TIJZ  
+> **Note:** whitespace is ignored to allow for readability of patterns
 
-## Modifiers
-Boolean expression operators, `&&`, `||`, and `!` are supported. Use parentheses to change order from left to right.  
-The prefix with format `<index>-[index]:` can apply to modifiers to modify a substring of the queue. Only putting one number works as left # pieces in the queue.   
-  
-Ex1: `pieces{modifier1 && (modifier2 || modifier3)}`  
-Ex2: `pieces{1-2:modifier1 && 2:(modifier2 && modifier3)}`  
-Different ways to use the prefix: 1-2 is the 2nd character and 2 is the left 2 characters  
+A pattern is a sequence of these components:
 
-### Regex Modifier
-Apply regular expression on the queues   
-  
-Ex1: `pieces{/^[^L]{3}/}` no L in the first 3 pieces  
-Ex2: `pieces{!/^T/}` doesn't start with a T  
+```text
+<generator>[{<filter>}] [<generator>[{<filter>}]]...
+```
 
-### Count Modifier
-Apply a count of pieces on the queue   
+A pattern usually is one or more generators followed by a filter:
 
-Ex1: `pieces{T=1}` one T piece  
-Ex2: `pieces{LJ=2}` two of both L and J  
-Ex3: `pieces{[LJ]=1}` one of L or J  
-Ex4: `pieces{LS[IZ]=1}` one of each L and S and one of I or Z  
-Ex5: `pieces{[*]=2}` wildcard character acts like TILJSZO. two of any character  
+```text
+*p7{L<S}  => ['TILJSZO', 'TILJSOZ', ...] # all perms, require L before S
+TSZO{T<O} => ['TSZO']                    # the queue TSZO, require T before O
+TSZO{O<T} => []                          # the queue TSZO, require O before T
+```
 
-Supported operators: `=` or `==`, `!=`, `<`, `>`, `<=`, and `>=`  
-  
-### Before Modifier
-Apply ordering of pieces in the queue  
-Also matches if all before pieces exist in the queue
-Set notation with `[]` is supported which represents or of the pieces    
+However, a filter can follow *any* generator, where the filter applies only to
+what has been generated so far.
 
-Ex1: `pieces{S < Z}` S piece is before Z  
-Ex2: `pieces{LLJ < SI}`  All LLJ pieces exists before a S or I  
-Ex3: `pieces{S<[IL]Z}` S is before I or L and always before Z  
+```text
+TSZ{S<Z}O{T<O} => ['TSZO'] # the queue TSZ, require S < Z, xO, require T < O
+```
+
+Generators combine by combining every possibility from one with every
+possibility from the next (a Cartesian product).
+For example, `*p7*p7` would have for each permutation of the tetrominos say `TILJSZO`
+it is followed by another permutation of the tetrominos say `IJLSTOZ` to get
+`TILJSZOIJLSTOZ` as a queue.
+
+### Generator
+
+A generator consists of two parts:
+
+- **pool** - a collection of pieces to pull from
+- **permute** - number of pieces to pull out of the pool
+
+> **Note:** generator output is sorted following TILJSZO ordering
+
+#### Pool
+
+A pool in the most verbose form consist of pieces in braces
+
+```text
+[T]
+[I]
+[TILJSZO]
+[TIL]
+[IIL]
+```
+
+However, there are shorthand for common pools:
+the tetrominos and the pool of all the pieces.
+
+```text
+# shorthand for TILJSZO tetrominos
+T -> [T]
+I -> [I]
+
+# shorthand for pool of all pieces
+* -> [TILJSZO]
+```
+
+The `^` modifier takes the set complement of the pool from the `*` pool.
+
+```text
+# complement of [T]: [TILJSZO] remove [T] -> [ILJSZO]
+[^T]   -> [ILJSZO]
+[^I]   -> [TLJSZO]
+
+# complement of [TIJ]: [TILJSZO] remove [TIJ] -> [LSZO]
+[^TIJ] -> [LSZO]
+```
+
+A pool can contain inner pools to create variations of the pool.
+Each choice of the inner pool generates a separate combination for the pool.
+A pool cannot be nested into inner pool as redundant behavior.
+
+```text
+# Inner pool [SZ] has 2 choices, creating 2 variations:
+[TI[SZ]]     -> [TIS] or [TIZ]
+
+# Two inner pools multiply together (2 choices * 2 choices = 4 variations)
+[TI[LJ][SZ]] -> [TILS], [TILZ], [TIJS], or [TIJZ]
+
+# ^ modifier only applies to current depth of pool
+[^TI[SZ]]    -> [LJSZO[SZ]] -> [LJSSZO] or [LJSZZO]
+[TI[^SZ]]    -> [TI[TILJO]] -> [TIT], [TII], [TIL], [TIJ], or [TIO]
+
+# Error: can't nest pool inside a inner pool
+[I[T[LJ]]]   -> Error 
+```
+
+Conceptually, `[I[T[LJ]]] = [I[TL]] or [I[TJ]] = [IT], [IL], [IT], or [IJ]`,
+which is the same as `[I[TLJ]]`, so nesting pools more is does not provide
+any more functionality as a flatten inner pool.
+
+#### Permute
+
+Each pool can be followed by the expression for **permute**
+to denote the length of the permutations.
+Exception for pools of the form of a tetromino, which cannot be followed
+by any permute expression as one piece can only have one permutation of itself.
+
+The **permute** expression consist of `p<permute>`
+
+```text
+# tetromino only permutation is itself
+T          -> T
+
+# permutations of TIL of size 3
+[TIL]p3    -> TIL, TLI, ITL, ILT, LTI, LIT
+
+# permutations of TIL of size 2
+[TIL]p2    -> TI, TL, IL
+
+# permutations of TI[SZ] of size 2
+[TI[SZ]]p2 -> [TIS]p2 or [TIZ]p2 
+           -> TI, TS, TZ, IT, IS, IZ, ST, SI, ZT, ZI
+
+# permutations of all pieces of size 7
+*p7        -> TILJSZO, TILJSOZ, TILJZSO, ...
+```
+
+In general, not including an **permute** expression is permuting with size of 1.
+
+```text
+T                   -> T
+[TIL] -> [TIL]p1    -> T, I, L
+*     -> [TLJSZO]p1 -> T, I, L, J, S, Z, O
+```
+
+A shorthand for all permutations of the size of the pool is `!`.
+This is helpful to just get all permutations without
+needing to know the size of the pool.
+
+```text
+[TIL]    -> [TIL]p3
+[T[SZ]]  -> [T[SZ]]p2
+*!       -> *p7
+```
+
+### Filter
+
+The **filter** component consist of a boolean expression with operations:
+`!` (NOT), `&&` (AND), and `||` (OR).
+Moreover, parentheses `()` can denote the precedence in the boolean expression.
+
+There are three types of propositions or literals:
+
+- **count** - true if queue satisfies a certain count of the pieces
+- **before** - true if queue satisfies a particular ordering of the pieces
+- **regex** - true if the queue satisfies the regex expression
+
+#### Count
+
+The **count** literal has the form
+
+```text
+<pieces> <operation> <number>
+```
+
+The possible operations are `=`, `!=`, `<`, `>`, `<=`, and `>=`.
+
+```text
+T=1   # require exactly 1 T in the queue
+T=0   # require exactly 0 T in the queue
+TL!=0 # require both T and L show up in the queue
+```
+
+#### Before
+
+#### Regex
+
+### Combining Patterns
+
+A comma restarts the scope of **filter**:
+everything after `,` is evaluated as its own sub-pattern
+before being combined with what came before.
+
+```text
+TSZ{S<Z},O{T<O} => [] 
+```
+
+Here, `O{T<O}` is evaluated as a sub-pattern, where `O` fails `T<O` (no `T` present),
+so this sub-pattern generates no queues, and
+the Cartesian product with `TSZ{S<Z}` is empty.
+
+A semicolon concatenates two independent patterns
+
+```text
+TSZ{S<Z}O{T<O};T => ['TSZO', 'T']
+```

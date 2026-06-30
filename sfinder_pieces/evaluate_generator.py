@@ -10,7 +10,7 @@ def evaluate_generator(node: GeneratorLiteral) -> list[str]:
   pools = product(*node.pool)
 
   # get permutations for each pool
-  raw_perms = (permutations(pool, node.permutate) for pool in pools)
+  raw_perms = (permutations(pool, node.permute) for pool in pools)
 
   # flatten into strings
   queues = (
@@ -39,10 +39,10 @@ def random_evaluate_generator(node: GeneratorLiteral) -> str:
 
   pool = random.choice(pools)
 
-  return "".join(random.sample(pool, node.permutate))
+  return "".join(random.sample(pool, node.permute))
 
 
 def total_queues(node: GeneratorLiteral) -> int:
   # assumes passes sampleable_generator
   # computes the total number possible queues
-  return perm(len(node.pool), node.permutate)
+  return perm(len(node.pool), node.permute)

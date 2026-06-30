@@ -8,7 +8,7 @@ CONTEXT_SPEC = [("LBRACE", r"\{"), ("RBRACE", r"\}")]
 
 GEN_SPEC = [
   ("GEN_PIECES", r"[TILJSZO*]|\[\^?(?:[TILJSZO]|\[\^?[TILJSZO]+\])+\]"),
-  ("PERMUTATE", r"!|p\d+"),
+  ("permute", r"!|p\d+"),
   ("WS", r"\s+"),  # Skip whitespace
   ("MISMATCH", r"."),  # catch any invalid characters
 ]
@@ -96,12 +96,12 @@ class FilterBlock(AST):
 
 
 class GeneratorLiteral(AST):
-  def __init__(self, pool: list[str], permutate: int):
+  def __init__(self, pool: list[str], permute: int):
     self.pool = pool
-    self.permutate = permutate
+    self.permute = permute
 
   def __repr__(self):
-    return f"Generator({self.pool}p{self.permutate})"
+    return f"Generator({self.pool}p{self.permute})"
 
 
 class BinaryOp(AST):
@@ -288,25 +288,25 @@ class Parser:
         raise ValueError("No expression given for a GEN_PIECES token")
 
       pool = self._generator_parse_pool(pool_expr.value)
-      permutate = 1
-      if len(pool) > 1 and self._peek().kind == "PERMUTATE":
-        permutate_expr = self._consume("PERMUTATE")
-        if permutate_expr.value is None:
-          raise ValueError("No expression given for a PERMUTATE token")
+      permute = 1
+      if len(pool) > 1 and self._peek().kind == "permute":
+        permute_expr = self._consume("permute")
+        if permute_expr.value is None:
+          raise ValueError("No expression given for a permute token")
 
-        if permutate_expr.value == "!":
-          permutate = len(pool)
+        if permute_expr.value == "!":
+          permute = len(pool)
         else:
           # strip the starting p letter for value
-          permutate = int(permutate_expr.value[1:])
-          if permutate == 0:
-            raise ValueError(f"Permutate cannot be 0 in {pool_expr.value}p0")
-      if permutate > len(pool):
-        # permutate given larger than the pool
+          permute = int(permute_expr.value[1:])
+          if permute == 0:
+            raise ValueError(f"permute cannot be 0 in {pool_expr.value}p0")
+      if permute > len(pool):
+        # permute given larger than the pool
         raise ValueError(
-          f"Given permutate {permutate} larger than the pool {pool_expr.value} -> {pool}"
+          f"Given permute {permute} larger than the pool {pool_expr.value} -> {pool}"
         )
-      return GeneratorLiteral(pool, permutate)
+      return GeneratorLiteral(pool, permute)
     else:
       raise ValueError(
         f"Expected GEN_PIECES token for generator but got {self._peek().kind} instead"
