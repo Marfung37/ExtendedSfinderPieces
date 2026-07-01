@@ -97,10 +97,16 @@ parser = Parser()
     ("{/^T/}", "ITL", False),
     ("{/^T/}", "LIT", False),
     # test range modifier
-    ("{4:(T=1)}", "TIII", True),
-    ("{4:(T=1)}", "IIIIT", False),  # T is at index 4 (outside range 0-4)
-    ("{3-7:(T=1)}", "IIITIII", True),  # T is within index 3 to 7
-    ("{3-7:(T=1)}", "TIIIIII", False),  # T is before index 3
+    ("{4:T=1}", "TIII", True),
+    ("{4:T=1}", "IIIIT", False),  # T is at index 4 (outside range 0-4)
+    ("{4:(T=1&&S=1)}", "IISIT", False),  # T is out of range
+    ("{4:(T=1&&S=1)}", "IITIS", False),  # S is out of range
+    ("{4:(T=1&&S=1)}", "ITSII", True),  # both S and T within first 4
+    ("{3-7:T=1}", "IIITIII", True),  # T is within index 3 to 7
+    ("{3-7:T=1}", "TIIIIII", False),  # T is before index 3
+    ("{3-7:(T=1&&S=1)}", "IISITIISI", False),  # S is out of range
+    ("{3-7:(T=1&&S=1)}", "IITISIIII", False),  # T is out of range
+    ("{3-7:(T=1&&S=1)}", "IITISTIII", True),  # both S and T within range
     # basic boolean logic works
     ("{[LJ]=1&&!LJ=1}", "LJ", False),
     ("{[LJ]=1&&!LJ=1}", "LI", True),

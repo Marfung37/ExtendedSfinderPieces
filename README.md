@@ -197,9 +197,100 @@ T=0   # require exactly 0 T in the queue
 TL!=0 # require both T and L show up in the queue
 ```
 
+The `<pieces>` token can allow for wildcards and the `[]` notation for combinations.
+Pieces outside of `[]` denote logical AND while pieces in `[]` are logical OR.
+
+> **Note:** `<pieces>` is not the same as **pool**, but they are similar.
+`<pieces>` support does not have `^` modifier or allow nesting for `[]`.
+
+```text
+*=1         -> TILJSZO=1
+[SZ]=1      -> S=1 || Z=1
+T[SZ]=1     -> TS=1 || TZ=1
+T[LJ][SZ]=1 -> TLS=1 || TLZ=1 || TJS=1 || TJZ=1
+[*]=2       -> T=2||I=2||L=2||J=2||S=2||Z=2||O=2
+```
+
 #### Before
 
+The **before** literal has the form
+
+```text
+<before pieces> < <after pieces>
+```
+
+This uses the same `<pieces>` token described in the [count literal](#count).
+
+```text
+L<S     # L before S
+LL<S    # 2 L's before S
+T[LJ]<S # T before S and L or J before S
+L<SZ    # L before both S and Z
+L<[SZ]  # L before S or Z
+L<SS    # L before 2 S's, equivalent to L<S
+```
+
+If "before piece" appears but a "after piece" does not appear in the queue,
+the expression is evaluated to TRUE.
+For example, `TILZ` satisfies `L<S` as L appears and S does not.
+
+To understand why this is accepted as "before", consider
+
+```text
+[ISZO]!,*p3{L<S}
+```
+
+After the `*p3` are 4 more pieces to fill the 7 bag, if an L piece is
+seen and an S is not seen then the L is before the S as its in the
+following 4 pieces.
+In general, this is the usual use case, and more intuitive
+understanding in saying "L before S" with 7 bag.
+
+Each distinct piece listed is based on the
+first appearance of the piece in the queue.
+For example, `SLS` does not satisfy `L<S`
+as the first L is not before the first S.
+For duplicate pieces, they correspond to the nth instance of the piece.
+`SLS` does not satisfy `SS<L` as first S is before L but
+the second S is not before the L.
+
 #### Regex
+
+The **regex** literal has the form
+
+```text
+/<regex>/
+```
+
+Or, in other words, the regex is within `/.../`.
+
+```regex
+/^I/       # queue starts with I
+/[SZ]{2}/  # queue has consecutive 2 SZ pieces (SZ or ZS)
+```
+
+Learn more about regex at [regex101.com](https://regex101.com/).
+
+#### Scoping
+
+To scope these literals to check substring of the queue,
+
+```text
+<number>:<expr>
+<start>-<end>:<expr>
+```
+
+```text
+1:T=1             # queue starts with T
+3:IJ=1            # queue has exactly 1 IJ in first 3 pieces
+1-3:/SZ/          # queue has form XSZX...
+3:(LJ=1||I[LJ]=1) # queue has LJ or I[LJ] in first 3 pieces
+```
+
+> **Note:** The end is exclusive, e.g. 1-3 is index 1 and index 2 pieces
+
+Scoping is primarily useful with the count literal to require
+pieces, e.g. denoting pieces that must start to build a setup.
 
 ### Combining Patterns
 
