@@ -10,7 +10,7 @@ mainly ability to filter the queues.
 As a CLI utility,
 
 ```sh
-python3 pieces.py "[pattern]"
+python3 pieces.py "<pattern>"
 ```
 
 The quotes around the pattern helps prevents the shell from interpreting symbols
@@ -20,11 +20,11 @@ in the `pattern` as shell symbols such as `!`, `&`, `|`, or `^`.
 
 A pattern (the string to be parsed) is built from two component types:
 
-- **generator** - produces queues.  
+- **generator** - generates queues.  
 Examples:
   - Tetrominos (`T`, `I`, `L`, ...)
   - All permutations of the 7 tetrominos (`*p7`)
-- **filter** - applies a constraint to the queue built so far.  
+- **filter** - applies a constraint to the queues generated so far.  
 Examples:
   - `{L<S}` filters for queues where L appears before S.
 
@@ -95,7 +95,6 @@ The `^` modifier takes the set complement of the pool from the `*` pool.
 ```text
 # complement of [T]: [TILJSZO] remove [T] -> [ILJSZO]
 [^T]   -> [ILJSZO]
-[^I]   -> [TLJSZO]
 
 # complement of [TIJ]: [TILJSZO] remove [TIJ] -> [LSZO]
 [^TIJ] -> [LSZO]
@@ -103,7 +102,7 @@ The `^` modifier takes the set complement of the pool from the `*` pool.
 
 A pool can contain inner pools to create variations of the pool.
 Each choice of the inner pool generates a separate combination for the pool.
-A pool cannot be nested into inner pool as redundant behavior.
+A pool cannot be nested into an inner pool as redundant behavior.
 
 ```text
 # Inner pool [SZ] has 2 choices, creating 2 variations:
@@ -164,8 +163,8 @@ This is helpful to just get all permutations without
 needing to know the size of the pool.
 
 ```text
-[TIL]    -> [TIL]p3
-[T[SZ]]  -> [T[SZ]]p2
+[TIL]!   -> [TIL]p3
+[T[SZ]]! -> [T[SZ]]p2
 *!       -> *p7
 ```
 
@@ -230,6 +229,14 @@ L<[SZ]  # L before S or Z
 L<SS    # L before 2 S's, equivalent to L<S
 ```
 
+Each distinct piece listed is based on the
+first appearance of the piece in the queue.
+For example, `SLS` does not satisfy `L<S`
+as the first L is not before the first S.
+For duplicate pieces, they correspond to the nth instance of the piece.
+`SLS` does not satisfy `SS<L` as first S is before L, but
+the second S is not before the L.
+
 If "before piece" appears but a "after piece" does not appear in the queue,
 the expression is evaluated to TRUE.
 For example, `TILZ` satisfies `L<S` as L appears and S does not.
@@ -245,14 +252,6 @@ seen and an S is not seen then the L is before the S as its in the
 following 4 pieces.
 In general, this is the usual use case, and more intuitive
 understanding in saying "L before S" with 7 bag.
-
-Each distinct piece listed is based on the
-first appearance of the piece in the queue.
-For example, `SLS` does not satisfy `L<S`
-as the first L is not before the first S.
-For duplicate pieces, they correspond to the nth instance of the piece.
-`SLS` does not satisfy `SS<L` as first S is before L but
-the second S is not before the L.
 
 #### Regex
 
