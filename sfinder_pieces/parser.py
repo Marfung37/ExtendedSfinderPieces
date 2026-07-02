@@ -8,7 +8,7 @@ CONTEXT_SPEC = [("LBRACE", r"\{"), ("RBRACE", r"\}")]
 
 GEN_SPEC = [
   ("GEN_PIECES", r"[TILJSZO*]|\[\^?(?:[TILJSZO]|\[\^?[TILJSZO]+\])+\]"),
-  ("permute", r"!|p\d+"),
+  ("PERMUTE", r"!|p\d+"),
   ("WS", r"\s+"),  # Skip whitespace
   ("MISMATCH", r"."),  # catch any invalid characters
 ]
@@ -289,8 +289,8 @@ class Parser:
 
       pool = self._generator_parse_pool(pool_expr.value)
       permute = 1
-      if len(pool) > 1 and self._peek().kind == "permute":
-        permute_expr = self._consume("permute")
+      if len(pool) > 1 and self._peek().kind == "PERMUTE":
+        permute_expr = self._consume("PERMUTE")
         if permute_expr.value is None:
           raise ValueError("No expression given for a permute token")
 
