@@ -44,6 +44,10 @@ class Token:
     return f"({self.kind}, '{self.value}')"
 
 
+LBRACE_TOKEN = Token("LBRACE", "{")
+RBRACE_TOKEN = Token("RBRACE", "}")
+
+
 def tokenize(text: str) -> list[Token]:
   tokens = []
 
@@ -61,7 +65,7 @@ def tokenize(text: str) -> list[Token]:
         tokens.append(Token(kind, value))
     elif filter_block:
       inside_filter = filter_block[1:-1]  # strip the {}
-      tokens.append(Token("LBRACE", "{"))
+      tokens.append(LBRACE_TOKEN)
       for m in FILTER_REGEX.finditer(inside_filter):
         kind = m.lastgroup
         value = m.group()
@@ -72,13 +76,10 @@ def tokenize(text: str) -> list[Token]:
         if kind == "MISMATCH":
           raise ValueError(f"Unexpected character '{value}' at position {m.start()}")
         tokens.append(Token(kind, value))
-      tokens.append(Token("RBRACE", "}"))
+      tokens.append(RBRACE_TOKEN)
     elif invalid_char:
       # only possible invalid characters are { or }
       raise ValueError(f"Found '{invalid_char}' without its counterpart")
-
-  if len(tokens) == 0:
-    raise ValueError(f"Expression {text} could not be tokenized")
 
   return tokens
 
