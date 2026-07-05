@@ -302,11 +302,11 @@ class Parser:
           permute = int(permute_expr.value[1:])
           if permute == 0:
             raise ValueError(f"permute cannot be 0 in {pool_expr.value}p0")
-      if permute > len(pool):
-        # permute given larger than the pool
-        raise ValueError(
-          f"Given permute {permute} larger than the pool {pool_expr.value} -> {pool}"
-        )
+          if permute > len(pool):
+            # permute given larger than the pool
+            raise ValueError(
+              f"Given permute {permute} larger than the pool {pool_expr.value} -> {pool}"
+            )
       return GeneratorLiteral(pool, permute)
     else:
       raise ValueError(
@@ -386,7 +386,9 @@ class Parser:
       # if before
       if next_token.kind == "PIECES":
         if op.value != "<":
-          raise ValueError("Comparison of pieces expression that isn't before operator")
+          raise ValueError(
+            "Comparison of pieces expression that isn't before operator of <"
+          )
         after_pieces = self._consume("PIECES")
         if after_pieces.value is None:
           raise ValueError(
