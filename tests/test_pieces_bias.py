@@ -21,7 +21,7 @@ def automatically_seed_random():
   print(f"\n--- RANDOM SEED USED FOR THIS RUN: {seed} ---")
 
 
-N_RUNS = 60_000
+N_RUNS = 500_000
 SIGNIFICANCE_VALUE = 0.05
 
 
