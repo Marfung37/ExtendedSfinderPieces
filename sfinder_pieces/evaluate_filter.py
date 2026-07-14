@@ -9,6 +9,8 @@ from .parser import (
   BeforeLiteral,
   RegexLiteral,
 )
+from .utils import PIECE_ORDER
+from dataclasses import dataclass
 
 OPERATORS = {
   "=": operator.eq,
@@ -20,14 +22,22 @@ OPERATORS = {
 }
 
 
-def get_char_indices(queue_string: str) -> dict[str, list[int]]:
+@dataclass
+class BeforeInterationNode:
+  before_pieces_count: list[int]
+  after_pieces_count: list[int]
+  before_index: int
+  after_index: int
+
+
+def get_char_indices(queue: str) -> list[list[int]]:
   """
-  Builds a map of character positions.
-  e.g., "ISIJ" -> {'I': [0, 2], 'S': [1], 'J': [3]}
+  Builds a map of character positions
+  e.g., "ISIJ" -> [[], [0, 2], [], [3], [1], [], []]
   """
-  positions = {}
-  for index, char in enumerate(queue_string):
-    positions.setdefault(char, []).append(index)
+  positions = [[] for _ in range(7)]
+  for index, char in enumerate(queue.encode()):
+    positions[PIECE_ORDER[char]].append(index)
   return positions
 
 
@@ -35,47 +45,71 @@ def evaluate_before(node: BeforeLiteral, queue: str) -> bool:
   # get index of each piece
   pos_map = get_char_indices(queue)
 
-  for before_idx, before_piece in enumerate(node.before_pieces):
-    for after_idx, after_piece in enumerate(node.after_pieces):
-      # is any of before fully satisfied?
-      outer_flag = False
-      for b_piece in before_piece:
-        # is any of the after fully satisfied by this before piece?
-        inner_flag = False
+  # slight optimization to reduce overhead of ord function
+  before_pieces = [before_piece.encode() for before_piece in node.before_pieces]
+  after_pieces = [after_piece.encode() for after_piece in node.after_pieces]
 
-        # determine which instance of this piece is this
-        # if second I in the before_pieces then look at second I in queue
-        b_instance_idx = node.before_pieces[:before_idx].count(b_piece)
+  stack: list[BeforeInterationNode] = []
+  stack.append(BeforeInterationNode([0] * 7, [0] * 7, 0, 0))
 
-        for a_piece in after_piece:
-          a_instance_idx = node.after_pieces[:after_idx].count(a_piece)
+  while len(stack) > 0:
+    stack_node = stack.pop()
 
-          b_indices = pos_map.get(b_piece, [])
-          a_indices = pos_map.get(a_piece, [])
+    if stack_node.before_index == len(node.before_pieces):
+      return True
 
-          # there's no instance of this before piece
-          # automatically false I < J if there is no I
-          if len(b_indices) <= b_instance_idx:
+    before_piece = before_pieces[stack_node.before_index]
+    after_piece = after_pieces[stack_node.after_index]
+
+    # get neighbors
+    for b_piece in before_piece:
+      b_piece_index = PIECE_ORDER[b_piece]
+      b_indices = pos_map[b_piece_index]
+      b_instance_idx = stack_node.before_pieces_count[b_piece_index]
+
+      # there's no instance of this before piece
+      # automatically false I < J if there is no I
+      if len(b_indices) <= b_instance_idx:
+        continue
+
+      for a_piece in after_piece:
+        a_piece_index = PIECE_ORDER[a_piece]
+        a_indices = pos_map[a_piece_index]
+        a_instance_idx = stack_node.after_pieces_count[a_piece_index]
+
+        # there's no instance of this after piece
+        # automatically satisfies I < J if there's no J yet there is an I
+        # or both pieces are here so check order
+        if (
+          len(a_indices) <= a_instance_idx
+          or b_indices[b_instance_idx] < a_indices[a_instance_idx]
+        ):
+          # went through all after pieces
+          if stack_node.after_index + 1 == len(node.after_pieces):
+            new_before_pieces_count = stack_node.before_pieces_count[:]
+            new_before_pieces_count[b_piece_index] += 1
+
+            stack.append(
+              BeforeInterationNode(
+                new_before_pieces_count, [0] * 7, stack_node.before_index + 1, 0
+              )
+            )
+
             continue
-          # there's no instance of this after piece
-          # automatically satisfies I < J if there's no J yet there is an I
-          elif len(a_indices) <= a_instance_idx:
-            inner_flag = True
-            break
-          # both pieces are here so check order
-          elif b_indices[b_instance_idx] < a_indices[a_instance_idx]:
-            inner_flag = True
-            break
 
-        # short circuit as found a before piece that is before one of the after pieces
-        if inner_flag:
-          outer_flag = True
-          break
+          new_after_pieces_count = stack_node.after_pieces_count[:]
+          new_after_pieces_count[a_piece_index] += 1
 
-      # short circuit if this before piece is not able to be satisfied
-      if not outer_flag:
-        return False
-  return True
+          stack.append(
+            BeforeInterationNode(
+              stack_node.before_pieces_count,
+              new_after_pieces_count,
+              stack_node.before_index,
+              stack_node.after_index + 1,
+            )
+          )
+
+  return False
 
 
 def evaluate_filter(node: AST, queue: str) -> bool:

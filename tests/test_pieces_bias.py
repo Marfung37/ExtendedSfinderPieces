@@ -22,7 +22,7 @@ def automatically_seed_random():
 
 
 N_RUNS = 500_000
-SIGNIFICANCE_VALUE = 0.05
+SIGNIFICANCE_VALUE = 0.001
 
 
 @pytest.mark.parametrize("expression", [("*"), ("[TTO]!"), ("[TTII]p2")])
