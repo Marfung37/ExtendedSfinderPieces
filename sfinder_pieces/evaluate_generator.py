@@ -1,6 +1,5 @@
 from itertools import product, permutations, chain
 from .parser import GeneratorLiteral
-from .utils import tetris_order_key
 from math import perm
 import random
 
@@ -20,7 +19,7 @@ def evaluate_generator(node: GeneratorLiteral) -> list[str]:
   )
 
   # sort and remove duplicates
-  return sorted(set(queues), key=tetris_order_key)
+  return list(dict.fromkeys(queues))
 
 
 def sampleable_generator(node: GeneratorLiteral) -> bool:
