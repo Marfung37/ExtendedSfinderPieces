@@ -1,7 +1,11 @@
 import pytest
 import random
 import sys
-from sfinder_pieces.sfinder_pieces import sfinder_pieces, random_sfinder_pieces
+from sfinder_pieces.sfinder_pieces import (
+  parse_pattern,
+  sfinder_pieces,
+  random_sfinder_pieces,
+)
 from math import comb, perm, ceil
 
 
@@ -75,7 +79,7 @@ def automatically_seed_random():
   ],
 )
 def test_evaluate_sfinder_pieces(expression, expected_length):
-  assert len(tuple(sfinder_pieces(expression))) == expected_length
+  assert len(tuple(sfinder_pieces(parse_pattern(expression)))) == expected_length
 
 
 SAMPLE_RATIO = 1 / 10
@@ -135,13 +139,14 @@ SAMPLE_RATIO = 1 / 10
   ],
 )
 def test_evaluate_random_sfinder_pieces(expression):
-  all_queues = set(sfinder_pieces(expression))
+  parsed_pattern = parse_pattern(expression)
+  all_queues = set(sfinder_pieces(parsed_pattern))
 
   if len(all_queues) == 0:
-    assert random_sfinder_pieces(expression) is None
+    assert random_sfinder_pieces(parsed_pattern) is None
     return
 
   # use a bounded sample size within min(5, max length of queues)-50
   samples = min(max(min(5, len(all_queues)), ceil(SAMPLE_RATIO * len(all_queues))), 50)
   for _ in range(samples):
-    assert random_sfinder_pieces(expression) in all_queues
+    assert random_sfinder_pieces(parsed_pattern) in all_queues

@@ -1,4 +1,4 @@
-from sfinder_pieces import sfinder_pieces
+from sfinder_pieces import sfinder_pieces, parse_pattern
 from sys import argv
 
 if __name__ == "__main__":
@@ -8,5 +8,5 @@ if __name__ == "__main__":
   # print out all queues for passed in string
   pattern = argv[1]
 
-  for queue in sfinder_pieces(pattern):
+  for queue in sfinder_pieces(parse_pattern(pattern)):
     print(queue)

@@ -1,7 +1,11 @@
 import pytest
 import random
 import sys
-from sfinder_pieces.sfinder_pieces import sfinder_pieces, random_sfinder_pieces
+from sfinder_pieces.sfinder_pieces import (
+  parse_pattern,
+  sfinder_pieces,
+  random_sfinder_pieces,
+)
 from collections import Counter
 from scipy.stats import chisquare
 
@@ -25,15 +29,19 @@ N_RUNS = 500_000
 SIGNIFICANCE_VALUE = 0.001
 
 
-@pytest.mark.parametrize("expression", [("*"), ("[TTO]!"), ("[TTII]p2")])
+@pytest.mark.parametrize(
+  "expression",
+  [("*"), ("[TTO]!"), ("[TTII]p2"), ("[T[SZ]]!"), ("[T[TSZ]]!"), ("[T[TSZ][TSZ]]!")],
+)
 def test_bias_random_sfinder_pieces(expression):
-  queues = tuple(sfinder_pieces(expression))
+  parsed_pattern = parse_pattern(expression)
+  queues = tuple(sfinder_pieces(parsed_pattern))
 
   # get expected number counts for uniform distribution
   expected_counts = [N_RUNS / len(queues)] * len(queues)
 
   # get observed counts from the function
-  results = [random_sfinder_pieces(expression) for _ in range(N_RUNS)]
+  results = [random_sfinder_pieces(parsed_pattern) for _ in range(N_RUNS)]
   counts = Counter(results)
   observed_counts = list(counts.values())
 
