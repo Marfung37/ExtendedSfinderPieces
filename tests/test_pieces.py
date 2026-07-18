@@ -28,6 +28,7 @@ def automatically_seed_random():
   "expression, expected_length",
   [
     # check if same as generator directly
+    ("", 0),
     ("T", 1),
     ("I", 1),
     ("L", 1),
@@ -89,6 +90,7 @@ SAMPLE_RATIO = 1 / 10
   "expression",
   [
     # check if same as generator directly
+    (""),
     ("T"),
     ("I"),
     ("L"),
