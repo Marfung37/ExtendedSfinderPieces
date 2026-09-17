@@ -31,8 +31,6 @@ GEN_REGEX = re.compile("|".join(f"(?P<{name}>{pattern})" for name, pattern in GE
 FILTER_REGEX = re.compile(
   "|".join(f"(?P<{name}>{pattern})" for name, pattern in FILTER_SPEC)
 )
-# separate the different contexts for the tokens
-CONTEXT_SPLIT_REGEX = re.compile(r"(\{.+?\})|([^{}]+)|(.)")
 
 
 class Token:
@@ -48,24 +46,35 @@ LBRACE_TOKEN = Token("LBRACE", "{")
 RBRACE_TOKEN = Token("RBRACE", "}")
 
 
+def find_end_filter_context(text: str, start: int):
+  i = start + 1
+  in_regex = False
+
+  while i < len(text):
+    c = text[i]
+
+    if c == "/":
+      in_regex = not in_regex
+    elif c == "}" and not in_regex:
+      return i
+
+    i += 1
+
+  raise ValueError("Unterminated filter {...}")
+
+
 def tokenize(text: str) -> list[Token]:
   tokens = []
+  i = 0
 
-  for match in CONTEXT_SPLIT_REGEX.finditer(text):
-    filter_block, gen_block, invalid_char = match.groups()
+  while i < len(text):
+    c = text[i]
 
-    if gen_block:
-      for m in GEN_REGEX.finditer(gen_block):
-        kind = m.lastgroup
-        value = m.group()
-        if kind == "WS":
-          continue  # skip whitespace
-        if kind == "MISMATCH":
-          raise ValueError(f"Unexpected character '{value}' at position {m.start()}")
-        tokens.append(Token(kind, value))
-    elif filter_block:
-      inside_filter = filter_block[1:-1]  # strip the {}
+    if c == "{":
+      end = find_end_filter_context(text, i)
       tokens.append(LBRACE_TOKEN)
+      inside_filter = text[i + 1 : end]
+
       for m in FILTER_REGEX.finditer(inside_filter):
         kind = m.lastgroup
         value = m.group()
@@ -76,10 +85,31 @@ def tokenize(text: str) -> list[Token]:
         if kind == "MISMATCH":
           raise ValueError(f"Unexpected character '{value}' at position {m.start()}")
         tokens.append(Token(kind, value))
+
       tokens.append(RBRACE_TOKEN)
-    elif invalid_char:
-      # only possible invalid characters are { or }
-      raise ValueError(f"Found '{invalid_char}' without its counterpart")
+
+      i = end + 1
+
+      continue
+    elif c == "}":
+      raise ValueError("Found closing '}' without open '{'")
+
+    end = i + 1
+    while end < len(text) and text[end] != "{":
+      end += 1
+
+    gen_block = text[i:end]
+
+    for m in GEN_REGEX.finditer(gen_block):
+      kind = m.lastgroup
+      value = m.group()
+      if kind == "WS":
+        continue  # skip whitespace
+      if kind == "MISMATCH":
+        raise ValueError(f"Unexpected character '{value}' at position {m.start()}")
+      tokens.append(Token(kind, value))
+
+    i = end
 
   return tokens
 

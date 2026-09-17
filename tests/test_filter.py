@@ -112,6 +112,8 @@ parser = Parser()
     ("{/^T/}", "TSZ", True),
     ("{/^T/}", "ITL", False),
     ("{/^T/}", "LIT", False),
+    ("{/T{2}/}", "TIT", False),
+    ("{/T{2}/}", "TTI", True),
     # test range modifier
     ("{4:T=1}", "TIII", True),
     ("{4:T=1}", "IIIIT", False),  # T is at index 4 (outside range 0-4)
